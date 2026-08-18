@@ -216,59 +216,52 @@ namespace AutoExile.Modes.BossEncounters
                 return BossEncounterResult.InProgress;
             }
 
-            // If player drifted too far from center, walk back
-            if (distToCenter > 50 && !ctx.Navigation.IsNavigating)
+            // If in Ball Phase
+            if (_bossEntity != null && _hasEngagedBoss && distToCenter <= 45 && (!_bossEntity.IsTargetable || _bossEntity.IsHidden))
             {
                 BotInput.ReleaseRightClick();
-                ctx.Navigation.NavigateTo(gc, ArenaCenterPos);
-                Status = $"Returning to center arena ({distToCenter:F0}g)";
+                _phase = ExarchPhase.BallPhase;
+                _phaseStartTime = DateTime.Now;
+                Status = "Exarch Ball Phase — dodging meteors";
+                ctx.Log("[Exarch] Boss became untargetable, entering Ball Phase");
                 return BossEncounterResult.InProgress;
             }
 
+            // Determine target screen position (Boss position or Arena Center)
+            var cam = gc.IngameState.Camera;
+            Vector2 targetScreenPos;
+
             if (_bossEntity != null && _bossEntity.IsAlive && !_bossEntity.IsDead)
             {
-                // Only enter Ball Phase if we have actually engaged the boss and are in the arena
-                if (_hasEngagedBoss && distToCenter <= 45 && (!_bossEntity.IsTargetable || _bossEntity.IsHidden))
-                {
-                    BotInput.ReleaseRightClick();
-                    _phase = ExarchPhase.BallPhase;
-                    _phaseStartTime = DateTime.Now;
-                    Status = "Exarch Ball Phase — dodging meteors";
-                    ctx.Log("[Exarch] Boss became untargetable, entering Ball Phase");
-                    return BossEncounterResult.InProgress;
-                }
-
                 var bossGrid = new Vector2(_bossEntity.GridPosNum.X, _bossEntity.GridPosNum.Y);
                 _bossDeathPos = bossGrid;
-                var dist = Vector2.Distance(playerGrid, bossGrid);
-
-                // Aim directly at Boss's 3D/Screen position and HOLD Right Click!
-                var cam = gc.IngameState.Camera;
                 var bossWorld = _bossEntity.BoundsCenterPosNum;
                 var bossScreen = cam.WorldToScreen(bossWorld);
                 var windowRect = gc.Window.GetWindowRectangle();
-                var absScreenPos = new Vector2(windowRect.X + bossScreen.X, windowRect.Y + bossScreen.Y);
-
-                if (dist <= 35)
-                {
-                    BotInput.HoldRightClickAt(absScreenPos);
-                    Status = $"Holding Right-Click on Searing Exarch — dist={dist:F0}";
-                }
-                else
-                {
-                    BotInput.ReleaseRightClick();
-                    if (!ctx.Navigation.IsNavigating)
-                        ctx.Navigation.NavigateTo(gc, bossGrid);
-                    Status = $"Moving closer to Exarch ({dist:F0}g)";
-                }
+                targetScreenPos = new Vector2(windowRect.X + bossScreen.X, windowRect.Y + bossScreen.Y);
             }
             else
             {
-                BotInput.ReleaseRightClick();
-                if (distToCenter > 15 && !ctx.Navigation.IsNavigating)
-                    ctx.Navigation.NavigateTo(gc, ArenaCenterPos);
+                var centerWorld = Pathfinding.GridToWorld3D(gc, ArenaCenterPos);
+                var centerScreen = cam.WorldToScreen(centerWorld);
+                var windowRect = gc.Window.GetWindowRectangle();
+                targetScreenPos = new Vector2(windowRect.X + centerScreen.X, windowRect.Y + centerScreen.Y);
+            }
 
-                Status = "Approaching arena center (252, 252)";
+            // When at boss position: STAND STILL IN PLACE AND CAST/THROW CONTINUOUSLY
+            if (distToCenter <= 30)
+            {
+                ctx.Navigation.Stop(gc);
+                BotInput.CastRightClickAt(targetScreenPos);
+                Status = $"Casting continuously at Searing Exarch (standing in place at {playerGrid.X:F0}, {playerGrid.Y:F0})";
+            }
+            else
+            {
+                // Move towards center while casting
+                if (!ctx.Navigation.IsNavigating)
+                    ctx.Navigation.NavigateTo(gc, ArenaCenterPos);
+                BotInput.CastRightClickAt(targetScreenPos);
+                Status = $"Moving to boss and casting ({distToCenter:F0}g away)";
             }
 
             return BossEncounterResult.InProgress;

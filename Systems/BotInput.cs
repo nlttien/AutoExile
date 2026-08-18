@@ -562,6 +562,19 @@ namespace AutoExile.Systems
         public static bool IsRightClickHeld => _isRightClickHeld;
 
         /// <summary>
+        /// Continuously cast/throw Right Click skill at a specific screen position (e.g. traps, mines, spells, attacks).
+        /// Moves cursor to target and fires right-click down & up every tick.
+        /// </summary>
+        public static bool CastRightClickAt(Vector2 absPos)
+        {
+            if (!ClampToWindow(ref absPos)) return false;
+            Input.SetCursorPos(absPos);
+            SendRightDown("cast-right-down");
+            SendRightUp("cast-right-up");
+            return true;
+        }
+
+        /// <summary>
         /// Continuously hold Right Click down at a specific screen position (e.g. channeling on a boss).
         /// </summary>
         public static bool HoldRightClickAt(Vector2 absPos)
