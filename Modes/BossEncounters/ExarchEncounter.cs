@@ -40,6 +40,7 @@ namespace AutoExile.Modes.BossEncounters
         };
 
         public string? InventoryFragmentPath => FragmentPath3;
+        public string? TargetMapName => "Absence of Patience and Wisdom";
 
         // Key high-value drops from The Searing Exarch
         public IReadOnlyList<string> MustLootItems { get; } = new[]

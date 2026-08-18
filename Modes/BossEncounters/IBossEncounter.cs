@@ -31,6 +31,10 @@ namespace AutoExile.Modes.BossEncounters
         /// Null = stash only.</summary>
         string? InventoryFragmentPath => null;
 
+        /// <summary>Target Atlas Node / Map Name to select in Map Device (e.g. "Absence of Patience and Wisdom").
+        /// Null = auto-match via right-click fragment or named-map flow.</summary>
+        string? TargetMapName => null;
+
         /// <summary>Number of fragments consumed per map open. Used to stop when inventory is insufficient.</summary>
         int FragmentCost => 1;
 

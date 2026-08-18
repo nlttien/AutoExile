@@ -395,22 +395,25 @@ namespace AutoExile.Systems
                 if (!_nodeSelected)
                 {
                     var nameEl = atlas.GetChildFromIndices(MapNameTextPath);
-                    var expectedName = StripMapPrefix(TargetMapName);
-                    if (nameEl?.Text != null &&
-                        nameEl.Text.Equals(expectedName, StringComparison.OrdinalIgnoreCase))
+                    var expectedName = StripMapPrefix(TargetMapName) ?? "";
+                    var actualName = nameEl?.Text ?? "";
+                    if (!string.IsNullOrEmpty(actualName) && (
+                        actualName.Equals(expectedName, StringComparison.OrdinalIgnoreCase) ||
+                        actualName.Contains(expectedName, StringComparison.OrdinalIgnoreCase) ||
+                        expectedName.Contains(actualName, StringComparison.OrdinalIgnoreCase)))
                     {
                         _nodeSelected = true;
                         Status = $"[Select] {TargetMapName} confirmed selected";
                     }
                     else
                     {
-                        // Device panel may still be loading after a right-click — wait before retrying
+                        // Device panel may still be loading after a click — wait before retrying
                         if ((DateTime.Now - _lastActionTime).TotalSeconds < 2.0)
                         {
                             Status = $"[Select] Device panel open, waiting for name to update (got: {nameEl?.Text ?? "null"})";
                             return MapDeviceResult.InProgress;
                         }
-                        // Wrong map selected — click the correct node
+                        // Retry clicking the correct node
                         return TickSelectAtlasNode(gc, atlas);
                     }
                 }
@@ -561,10 +564,28 @@ namespace AutoExile.Systems
                 return MapDeviceResult.Failed;
             }
 
+            // Try special boss location lookup first (e.g. Absence of Patience and Wisdom at atlas[38][0][155])
+            var specialNode = FindSpecialAtlasNode(atlas, lookupName ?? TargetMapName ?? "");
+            if (specialNode != null)
+            {
+                var nodeRect = specialNode.GetClientRect();
+                var nodeCenter = new Vector2(nodeRect.Center.X, nodeRect.Center.Y);
+                var windowRect = gc.Window.GetWindowRectangle();
+                var absPos = new Vector2(windowRect.X + nodeCenter.X, windowRect.Y + nodeCenter.Y);
+
+                if (BotInput.Click(absPos))
+                {
+                    _lastActionTime = DateTime.Now;
+                    _nodeClickAttempts++;
+                    Status = $"[Select] Clicked special boss node {TargetMapName} on Atlas (attempt {_nodeClickAttempts})";
+                }
+                return MapDeviceResult.InProgress;
+            }
+
             // Try standard AtlasNodes name lookup. The web UI prefixes "supported"
             // map names with "★ " as a visual marker — the game files return the
             // bare name, so we strip the marker before comparing.
-            var lookupName = StripMapPrefix(TargetMapName);
+            var lookupNameBare = StripMapPrefix(TargetMapName);
             var nodes = gc.Files?.AtlasNodes?.EntriesList;
             int nodeIndex = -1;
             if (nodes != null)
@@ -572,7 +593,7 @@ namespace AutoExile.Systems
                 for (int i = 0; i < Math.Min(nodes.Count, 110); i++)
                 {
                     var name = nodes[i].Area?.Name;
-                    if (name != null && name.Equals(lookupName, StringComparison.OrdinalIgnoreCase))
+                    if (name != null && name.Equals(lookupNameBare, StringComparison.OrdinalIgnoreCase))
                     {
                         nodeIndex = i;
                         break;
@@ -1080,6 +1101,77 @@ namespace AutoExile.Systems
             var entity = item.Entity;
             if (entity == null) return false;
             return entity.Path?.EndsWith("CurrencyAfflictionFragment") == true;
+        }
+
+        /// <summary>
+        /// Find special boss atlas location (e.g. Absence of Patience and Wisdom at atlas[38][0][155] or by tooltip).
+        /// </summary>
+        private static Element? FindSpecialAtlasNode(Element atlas, string lookupName)
+        {
+            if (atlas == null) return null;
+
+            // 1. Check atlas[38][0] (where boss location nodes reside in PoE 1 Atlas Panel)
+            var bossContainer = atlas.GetChildAtIndex(38)?.GetChildAtIndex(0);
+            if (bossContainer != null)
+            {
+                // Direct index 155 check (The Searing Exarch / Absence of Patience and Wisdom)
+                if (bossContainer.ChildCount > 155)
+                {
+                    var direct155 = bossContainer.GetChildAtIndex(155);
+                    if (direct155 != null && direct155.IsVisible && direct155.IsActive)
+                    {
+                        var tt = direct155.Tooltip?.Text ?? direct155.Text ?? "";
+                        if (string.IsNullOrEmpty(lookupName) ||
+                            tt.Contains("Absence of Patience and Wisdom", StringComparison.OrdinalIgnoreCase) ||
+                            tt.Contains(lookupName, StringComparison.OrdinalIgnoreCase) ||
+                            lookupName.Contains("Absence", StringComparison.OrdinalIgnoreCase) ||
+                            lookupName.Contains("Searing", StringComparison.OrdinalIgnoreCase) ||
+                            lookupName.Contains("Exarch", StringComparison.OrdinalIgnoreCase))
+                        {
+                            return direct155;
+                        }
+                    }
+                }
+
+                // Check all children in bossContainer
+                if (bossContainer.Children != null)
+                {
+                    foreach (var child in bossContainer.Children)
+                    {
+                        if (child == null || !child.IsVisible || !child.IsActive) continue;
+                        var tt = child.Tooltip?.Text ?? child.Text ?? "";
+                        if (!string.IsNullOrEmpty(tt) && (
+                            tt.Contains(lookupName, StringComparison.OrdinalIgnoreCase) ||
+                            tt.Contains("Absence of Patience and Wisdom", StringComparison.OrdinalIgnoreCase) ||
+                            tt.Contains("The Searing Exarch", StringComparison.OrdinalIgnoreCase)))
+                        {
+                            return child;
+                        }
+                    }
+                }
+            }
+
+            // 2. Fallback: search entire Atlas element recursively for element with matching Tooltip/Text
+            return FindChildByTooltip(atlas, lookupName);
+        }
+
+        private static Element? FindChildByTooltip(Element root, string text)
+        {
+            if (root == null || !root.IsVisible) return null;
+            if (root.Tooltip?.Text?.Contains(text, StringComparison.OrdinalIgnoreCase) == true)
+                return root;
+            if (root.Text?.Contains(text, StringComparison.OrdinalIgnoreCase) == true)
+                return root;
+
+            if (root.Children != null)
+            {
+                foreach (var child in root.Children)
+                {
+                    var found = FindChildByTooltip(child, text);
+                    if (found != null) return found;
+                }
+            }
+            return null;
         }
 
         /// <summary>

@@ -284,6 +284,7 @@ namespace AutoExile.Modes
             var stashSettings = ctx.Settings.Stash;
             var runSettings = ctx.Settings.Run;
             _hideoutFlow.Start(_activeEncounter!.MapFilter,
+                targetMapName: _activeEncounter.TargetMapName,
                 stashItemFilter: GetStashFilter(),
                 inventoryFragmentPath: _activeEncounter.InventoryFragmentPath,
                 stashItemThreshold: runSettings.StashItemThreshold.Value,
