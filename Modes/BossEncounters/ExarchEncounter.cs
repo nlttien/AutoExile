@@ -39,7 +39,7 @@ namespace AutoExile.Modes.BossEncounters
                    entity.Path.Contains(FragmentPath3);
         };
 
-        public string? InventoryFragmentPath => FragmentPath1;
+        public string? InventoryFragmentPath => FragmentPath3;
 
         // Key high-value drops from The Searing Exarch
         public IReadOnlyList<string> MustLootItems { get; } = new[]

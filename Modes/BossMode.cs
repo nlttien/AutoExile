@@ -148,19 +148,20 @@ namespace AutoExile.Modes
             var gc = ctx.Game;
             if (gc?.Player == null) return;
 
-            // Detect boss type change mid-session (user changed setting while paused or between runs)
+            // Detect boss type change mid-session or restart when idle in hideout
             var currentBossType = ctx.Settings.Boss.BossType.Value ?? "";
-            if (currentBossType != _lastBossType && !string.IsNullOrEmpty(currentBossType)
-                && (_phase == BossPhase.InHideout || _phase == BossPhase.Idle))
+            bool bossTypeChanged = currentBossType != _lastBossType && !string.IsNullOrEmpty(currentBossType);
+            if ((bossTypeChanged || _phase == BossPhase.Idle)
+                && (gc.Area.CurrentArea.IsHideout || gc.Area.CurrentArea.IsTown))
             {
-                ctx.Log($"[Boss] Boss type changed: {_lastBossType} → {currentBossType}");
-                _lastBossType = currentBossType;
-                if (gc.Area.CurrentArea.IsHideout || gc.Area.CurrentArea.IsTown)
+                if (bossTypeChanged)
                 {
-                    ModeHelpers.CancelAllSystems(ctx);
-                    _hideoutFlow.Cancel();
-                    StartHideoutFlow(ctx);
+                    ctx.Log($"[Boss] Boss type changed: {_lastBossType} → {currentBossType}");
+                    _lastBossType = currentBossType;
                 }
+                ModeHelpers.CancelAllSystems(ctx);
+                _hideoutFlow.Cancel();
+                StartHideoutFlow(ctx);
             }
 
             // Area change detection

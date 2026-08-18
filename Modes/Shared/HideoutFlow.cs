@@ -169,9 +169,7 @@ namespace AutoExile.Modes.Shared
             // Only withdraw when below minimum needed — don't top up each run
             bool usesFragments = !string.IsNullOrEmpty(_withdrawFragmentPath);
             int minNeeded = _minFragments > 0 ? _minFragments : 1;
-            bool canWithdraw = usesFragments
-                && !string.IsNullOrEmpty(_resourceTabName)
-                && _fragmentStock > 0;
+            bool canWithdraw = usesFragments && _fragmentStock > 0;
             bool needSingleWithdraw = canWithdraw && fragmentsInInventory < minNeeded;
             int withdrawNeeded = needSingleWithdraw ? _fragmentStock : 0;
             bool needMultiWithdraw = activeWithdrawList != null;
@@ -227,7 +225,7 @@ namespace AutoExile.Modes.Shared
                 case StashResult.Failed:
                 {
                     // Verify we have enough fragments before proceeding to map device
-                    if (!string.IsNullOrEmpty(_withdrawFragmentPath) && !string.IsNullOrEmpty(_resourceTabName))
+                    if (!string.IsNullOrEmpty(_withdrawFragmentPath))
                     {
                         int frags = StashSystem.CountInventoryItems(ctx.Game, _withdrawFragmentPath);
                         int needed = _minFragments > 0 ? _minFragments : 1;
