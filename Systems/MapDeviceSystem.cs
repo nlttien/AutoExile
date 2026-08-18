@@ -564,30 +564,10 @@ namespace AutoExile.Systems
                 return MapDeviceResult.Failed;
             }
 
-            var lookupName = StripMapPrefix(TargetMapName) ?? "";
-
-            // Try special boss location lookup first (e.g. Absence of Patience and Wisdom at atlas[38][0][155])
-            var specialNode = FindSpecialAtlasNode(atlas, lookupName);
-            if (specialNode != null)
-            {
-                var nodeRect = specialNode.GetClientRect();
-                var nodeCenter = new Vector2(nodeRect.Center.X, nodeRect.Center.Y);
-                var windowRect = gc.Window.GetWindowRectangle();
-                var absPos = new Vector2(windowRect.X + nodeCenter.X, windowRect.Y + nodeCenter.Y);
-
-                if (BotInput.Click(absPos))
-                {
-                    _lastActionTime = DateTime.Now;
-                    _nodeClickAttempts++;
-                    Status = $"[Select] Clicked special boss node {TargetMapName} on Atlas (attempt {_nodeClickAttempts})";
-                }
-                return MapDeviceResult.InProgress;
-            }
-
             // Try standard AtlasNodes name lookup. The web UI prefixes "supported"
             // map names with "★ " as a visual marker — the game files return the
             // bare name, so we strip the marker before comparing.
-            var lookupNameBare = lookupName;
+            var lookupName = StripMapPrefix(TargetMapName);
             var nodes = gc.Files?.AtlasNodes?.EntriesList;
             int nodeIndex = -1;
             if (nodes != null)
