@@ -558,6 +558,36 @@ namespace AutoExile.Systems
             Input.RightUp();
         }
 
+        private static bool _isRightClickHeld;
+        public static bool IsRightClickHeld => _isRightClickHeld;
+
+        /// <summary>
+        /// Continuously hold Right Click down at a specific screen position (e.g. channeling on a boss).
+        /// </summary>
+        public static bool HoldRightClickAt(Vector2 absPos)
+        {
+            if (!ClampToWindow(ref absPos)) return false;
+            Input.SetCursorPos(absPos);
+            if (!_isRightClickHeld)
+            {
+                SendRightDown("hold-right");
+                _isRightClickHeld = true;
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Release Right Click if currently held.
+        /// </summary>
+        public static void ReleaseRightClick()
+        {
+            if (_isRightClickHeld)
+            {
+                SendRightUp("release-right");
+                _isRightClickHeld = false;
+            }
+        }
+
         /// <summary>
         /// Async delay that enforces the minimum gap between input events.
         /// Call before sending a new input event in async methods.
@@ -1018,6 +1048,7 @@ namespace AutoExile.Systems
         /// </summary>
         public static void ReleaseAllKeys()
         {
+            ReleaseRightClick();
             if (_heldKeys.Count > 0)
             {
                 foreach (var key in _heldKeys.Keys)

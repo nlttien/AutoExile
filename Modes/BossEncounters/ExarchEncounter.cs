@@ -192,6 +192,7 @@ namespace AutoExile.Modes.BossEncounters
         {
             if ((DateTime.Now - _phaseStartTime).TotalSeconds > 240)
             {
+                BotInput.ReleaseRightClick();
                 Status = "Fight timeout";
                 return BossEncounterResult.Failed;
             }
@@ -201,6 +202,7 @@ namespace AutoExile.Modes.BossEncounters
             // If player drifted too far from center, walk back
             if (distToCenter > 50 && !ctx.Navigation.IsNavigating)
             {
+                BotInput.ReleaseRightClick();
                 ctx.Navigation.NavigateTo(gc, ArenaCenterPos);
                 Status = $"Returning to center arena ({distToCenter:F0}g)";
                 return BossEncounterResult.InProgress;
@@ -211,6 +213,7 @@ namespace AutoExile.Modes.BossEncounters
                 // Only enter Ball Phase if we have actually engaged the boss and are in the arena
                 if (_hasEngagedBoss && distToCenter <= 45 && (!_bossEntity.IsTargetable || _bossEntity.IsHidden))
                 {
+                    BotInput.ReleaseRightClick();
                     _phase = ExarchPhase.BallPhase;
                     _phaseStartTime = DateTime.Now;
                     Status = "Exarch Ball Phase — dodging meteors";
@@ -222,17 +225,45 @@ namespace AutoExile.Modes.BossEncounters
                 _bossDeathPos = bossGrid;
                 var dist = Vector2.Distance(playerGrid, bossGrid);
 
-                if (dist > ctx.Settings.Build.CombatRange.Value && !ctx.Navigation.IsNavigating)
-                    ctx.Navigation.NavigateTo(gc, bossGrid);
+                // Aim directly at Boss's 3D/Screen position and HOLD Right Click!
+                var cam = gc.IngameState.Camera;
+                var bossWorld = _bossEntity.BoundsCenterPosNum;
+                var bossScreen = cam.WorldToScreen(bossWorld);
+                var windowRect = gc.Window.GetWindowRectangle();
+                var absScreenPos = new Vector2(windowRect.X + bossScreen.X, windowRect.Y + bossScreen.Y);
 
-                Status = $"Fighting The Searing Exarch — dist={dist:F0}";
+                if (dist <= 35)
+                {
+                    BotInput.HoldRightClickAt(absScreenPos);
+                    Status = $"Holding Right-Click on Searing Exarch — dist={dist:F0}";
+                }
+                else
+                {
+                    BotInput.ReleaseRightClick();
+                    if (!ctx.Navigation.IsNavigating)
+                        ctx.Navigation.NavigateTo(gc, bossGrid);
+                    Status = $"Moving closer to Exarch ({dist:F0}g)";
+                }
             }
             else
             {
-                if (distToCenter > 15 && !ctx.Navigation.IsNavigating)
-                    ctx.Navigation.NavigateTo(gc, ArenaCenterPos);
-
-                Status = "Fighting — waiting for Exarch";
+                if (distToCenter <= 25)
+                {
+                    var cam = gc.IngameState.Camera;
+                    var centerWorld = Pathfinding.GridToWorld3D(gc, ArenaCenterPos);
+                    var centerScreen = cam.WorldToScreen(centerWorld);
+                    var windowRect = gc.Window.GetWindowRectangle();
+                    var absScreenPos = new Vector2(windowRect.X + centerScreen.X, windowRect.Y + centerScreen.Y);
+                    BotInput.HoldRightClickAt(absScreenPos);
+                    Status = "Holding Right-Click at Arena Center (252, 252)";
+                }
+                else
+                {
+                    BotInput.ReleaseRightClick();
+                    if (!ctx.Navigation.IsNavigating)
+                        ctx.Navigation.NavigateTo(gc, ArenaCenterPos);
+                    Status = "Fighting — waiting for Exarch";
+                }
             }
 
             return BossEncounterResult.InProgress;
@@ -240,6 +271,8 @@ namespace AutoExile.Modes.BossEncounters
 
         private BossEncounterResult TickBallPhase(BotContext ctx, GameController gc, Vector2 playerGrid)
         {
+            BotInput.ReleaseRightClick();
+
             if ((DateTime.Now - _phaseStartTime).TotalSeconds > 45)
             {
                 // Ball phase ended by timeout -> return to fighting
@@ -269,6 +302,7 @@ namespace AutoExile.Modes.BossEncounters
 
         private BossEncounterResult TickWaitingForLoot(BotContext ctx, GameController gc, Vector2 playerGrid)
         {
+            BotInput.ReleaseRightClick();
             var timeout = ctx.Settings.Run.LootSweepTimeoutSeconds.Value;
             var elapsed = (DateTime.Now - _phaseStartTime).TotalSeconds;
 
@@ -390,9 +424,11 @@ namespace AutoExile.Modes.BossEncounters
 
         public void Reset()
         {
+            BotInput.ReleaseRightClick();
             _phase = ExarchPhase.Idle;
             _bossEntity = null;
             _bossWasAlive = false;
+            _hasEngagedBoss = false;
             _exploreFails = 0;
             _lastPlayerGrid = Vector2.Zero;
             _bossDeathPos = null;
