@@ -60,6 +60,7 @@ namespace AutoExile.Modes.BossEncounters
             "Curio Item"
         };
 
+        public bool SuppressCombat => _phase == ExarchPhase.WaitingForLoot;
         public bool SuppressCombatPositioning => _phase == ExarchPhase.BallPhase;
         public bool RelaxedPathing => false;
 
@@ -123,12 +124,16 @@ namespace AutoExile.Modes.BossEncounters
 
                 if (_bossEntity != null)
                 {
-                    if (_bossEntity.IsAlive)
-                        _bossWasAlive = true;
+                    bool isAlive = _bossEntity.IsAlive && !_bossEntity.IsDead;
 
-                    // Detect Boss Death
-                    if (_bossWasAlive && (!_bossEntity.IsAlive || _bossEntity.IsDead))
+                    if (isAlive)
                     {
+                        _bossWasAlive = true;
+                    }
+                    else if (_bossWasAlive || !_bossEntity.IsAlive || _bossEntity.IsDead)
+                    {
+                        // Boss is confirmed dead!
+                        BotInput.ReleaseRightClick();
                         _phase = ExarchPhase.WaitingForLoot;
                         _phaseStartTime = DateTime.Now;
                         _bossDeathPos = new Vector2(_bossEntity.GridPosNum.X, _bossEntity.GridPosNum.Y);
@@ -200,6 +205,18 @@ namespace AutoExile.Modes.BossEncounters
 
             var distToCenter = Vector2.Distance(playerGrid, ArenaCenterPos);
 
+            // Check if boss died
+            if (_bossEntity != null && (!_bossEntity.IsAlive || _bossEntity.IsDead))
+            {
+                BotInput.ReleaseRightClick();
+                _phase = ExarchPhase.WaitingForLoot;
+                _phaseStartTime = DateTime.Now;
+                _bossDeathPos = new Vector2(_bossEntity.GridPosNum.X, _bossEntity.GridPosNum.Y);
+                Status = "Searing Exarch defeated — sweeping loot";
+                ctx.Log("[Exarch] Boss confirmed dead, switching to loot phase");
+                return BossEncounterResult.InProgress;
+            }
+
             // If player drifted too far from center, walk back
             if (distToCenter > 50 && !ctx.Navigation.IsNavigating)
             {
@@ -209,7 +226,7 @@ namespace AutoExile.Modes.BossEncounters
                 return BossEncounterResult.InProgress;
             }
 
-            if (_bossEntity != null && _bossEntity.IsAlive)
+            if (_bossEntity != null && _bossEntity.IsAlive && !_bossEntity.IsDead)
             {
                 // Only enter Ball Phase if we have actually engaged the boss and are in the arena
                 if (_hasEngagedBoss && distToCenter <= 45 && (!_bossEntity.IsTargetable || _bossEntity.IsHidden))
@@ -248,23 +265,11 @@ namespace AutoExile.Modes.BossEncounters
             }
             else
             {
-                if (distToCenter <= 25)
-                {
-                    var cam = gc.IngameState.Camera;
-                    var centerWorld = Pathfinding.GridToWorld3D(gc, ArenaCenterPos);
-                    var centerScreen = cam.WorldToScreen(centerWorld);
-                    var windowRect = gc.Window.GetWindowRectangle();
-                    var absScreenPos = new Vector2(windowRect.X + centerScreen.X, windowRect.Y + centerScreen.Y);
-                    BotInput.HoldRightClickAt(absScreenPos);
-                    Status = "Holding Right-Click at Arena Center (252, 252)";
-                }
-                else
-                {
-                    BotInput.ReleaseRightClick();
-                    if (!ctx.Navigation.IsNavigating)
-                        ctx.Navigation.NavigateTo(gc, ArenaCenterPos);
-                    Status = "Fighting — waiting for Exarch";
-                }
+                BotInput.ReleaseRightClick();
+                if (distToCenter > 15 && !ctx.Navigation.IsNavigating)
+                    ctx.Navigation.NavigateTo(gc, ArenaCenterPos);
+
+                Status = "Approaching arena center (252, 252)";
             }
 
             return BossEncounterResult.InProgress;
