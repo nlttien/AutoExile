@@ -180,6 +180,7 @@ namespace AutoExile
             _bossMode.Register(new FearEncounter());
             _bossMode.Register(new MavenEncounter());
             _bossMode.Register(new SareshEncounter());
+            _bossMode.Register(new ExarchEncounter());
             RegisterMode(_bossMode);
 
             // Wave farming mode (recording-driven, forward-momentum model)
