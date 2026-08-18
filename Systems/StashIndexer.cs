@@ -82,8 +82,8 @@ namespace AutoExile.Systems
             if (_phase == IndexPhase.Idle || _phase == IndexPhase.Done || _phase == IndexPhase.Failed)
                 return;
 
-            var stashEl = gc.IngameState.IngameUi.StashElement;
-            if (stashEl?.IsVisible != true)
+            var stashEl = StashSystem.GetActiveStashElement(gc);
+            if (!StashSystem.IsAnyStashVisible(gc))
             {
                 Status = "Stash closed — index scan aborted";
                 _phase = IndexPhase.Failed;

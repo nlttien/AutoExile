@@ -28,12 +28,15 @@ namespace AutoExile.Modes.BossEncounters
         // Fragment metadata path substrings
         private const string FragmentPath1 = "CleansingBossFragment";
         private const string FragmentPath2 = "Incandescent";
+        private const string FragmentPath3 = "Cleansing";
 
         public Func<Element, bool> MapFilter => el =>
         {
             var entity = el.Entity;
             if (entity?.Path == null) return false;
-            return entity.Path.Contains(FragmentPath1) || entity.Path.Contains(FragmentPath2);
+            return entity.Path.Contains(FragmentPath1) || 
+                   entity.Path.Contains(FragmentPath2) || 
+                   entity.Path.Contains(FragmentPath3);
         };
 
         public string? InventoryFragmentPath => FragmentPath1;
@@ -45,9 +48,14 @@ namespace AutoExile.Modes.BossEncounters
             "Crystallised Omniscience",
             "Exceptional Eldritch Ichor",
             "Grand Eldritch Ichor",
+            "Greater Eldritch Ichor",
             "Eldritch Chaos Orb",
             "Eldritch Exalted Orb",
             "Eldritch Orb of Annulment",
+            "Orb of Conflict",
+            "The Annihilating Light",
+            "Dawnbreaker",
+            "Incandescent Invitation",
             "Curio Item"
         };
 

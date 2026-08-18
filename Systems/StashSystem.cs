@@ -156,6 +156,24 @@ namespace AutoExile.Systems
             Status = "Cancelled";
         }
 
+        public static ExileCore.PoEMemory.Elements.StashElement? GetActiveStashElement(GameController gc)
+        {
+            var ingameUi = gc?.IngameState?.IngameUi;
+            if (ingameUi == null) return null;
+            if (ingameUi.GuildStashElement?.IsVisible == true)
+                return ingameUi.GuildStashElement;
+            if (ingameUi.StashElement?.IsVisible == true)
+                return ingameUi.StashElement;
+            return ingameUi.GuildStashElement ?? ingameUi.StashElement;
+        }
+
+        public static bool IsAnyStashVisible(GameController gc)
+        {
+            var ingameUi = gc?.IngameState?.IngameUi;
+            if (ingameUi == null) return false;
+            return ingameUi.GuildStashElement?.IsVisible == true || ingameUi.StashElement?.IsVisible == true;
+        }
+
         /// <summary>
         /// Navigate to stash and open it — but don't deposit or withdraw anything.
         /// Returns Succeeded once the stash panel is open, Failed if unable to open.
@@ -163,7 +181,7 @@ namespace AutoExile.Systems
         /// </summary>
         public StashResult TickOpenOnly(GameController gc, NavigationSystem nav)
         {
-            if (gc.IngameState.IngameUi.StashElement?.IsVisible == true)
+            if (IsAnyStashVisible(gc))
             {
                 _phase = StashPhase.Idle;
                 return StashResult.Succeeded;
@@ -233,7 +251,7 @@ namespace AutoExile.Systems
         private StashResult TickNavigate(GameController gc, NavigationSystem nav)
         {
             // Check if stash is already open
-            if (gc.IngameState.IngameUi.StashElement?.IsVisible == true)
+            if (IsAnyStashVisible(gc))
             {
                 EnterFirstStashPhase(gc);
                 Status = "Stash already open";
@@ -331,7 +349,7 @@ namespace AutoExile.Systems
             // Switch to store tab if configured and not already on it
             if (!string.IsNullOrEmpty(StoreTabName))
             {
-                var stash = gc.IngameState?.IngameUi?.StashElement;
+                var stash = GetActiveStashElement(gc);
                 var names = stash?.AllStashNames;
                 var currentIdx = stash?.IndexVisibleStash ?? -1;
                 if (names != null && currentIdx >= 0 && currentIdx < names.Count
@@ -354,7 +372,7 @@ namespace AutoExile.Systems
 
         private StashResult TickOpenStash(GameController gc)
         {
-            if (gc.IngameState.IngameUi.StashElement?.IsVisible == true)
+            if (IsAnyStashVisible(gc))
             {
                 EnterFirstStashPhase(gc);
                 return StashResult.InProgress;
@@ -382,8 +400,8 @@ namespace AutoExile.Systems
 
         private StashResult TickSwitchTab(GameController gc)
         {
-            var stashEl = gc.IngameState.IngameUi.StashElement;
-            if (stashEl?.IsVisible != true)
+            var stashEl = GetActiveStashElement(gc);
+            if (!IsAnyStashVisible(gc))
             {
                 Status = "Stash closed during tab switch";
                 _phase = StashPhase.Idle;
@@ -456,8 +474,8 @@ namespace AutoExile.Systems
 
         private StashResult TickWithdrawItems(GameController gc)
         {
-            var stashEl = gc.IngameState.IngameUi.StashElement;
-            if (stashEl?.IsVisible != true)
+            var stashEl = GetActiveStashElement(gc);
+            if (!IsAnyStashVisible(gc))
             {
                 Status = "Stash closed during withdraw";
                 _phase = StashPhase.Idle;
@@ -515,7 +533,7 @@ namespace AutoExile.Systems
             // Find ALL matching items in the visible stash tab. Batch-clicking ONE
             // position N times only works for stacks; for non-stackable items
             // (maps) each one occupies a different slot and we need to click each.
-            var items = stashEl.VisibleStash?.VisibleInventoryItems;
+            var items = stashEl?.VisibleStash?.VisibleInventoryItems;
             if (items == null)
             {
                 Status = "No items visible in withdraw tab";
@@ -577,7 +595,7 @@ namespace AutoExile.Systems
         private StashResult TickStoreItems(GameController gc)
         {
             // Check stash is still open
-            if (gc.IngameState.IngameUi.StashElement?.IsVisible != true)
+            if (!IsAnyStashVisible(gc))
             {
                 Status = "Stash closed unexpectedly";
                 _phase = StashPhase.Idle;
@@ -725,7 +743,7 @@ namespace AutoExile.Systems
         private StashResult TickCloseStash(GameController gc)
         {
             // Already closed?
-            if (gc.IngameState.IngameUi.StashElement?.IsVisible != true)
+            if (!IsAnyStashVisible(gc))
             {
                 Status = $"Stash closed — stored {_itemsStored} items";
                 _phase = StashPhase.Idle;
@@ -749,7 +767,7 @@ namespace AutoExile.Systems
         private StashResult TickApplyIncubators(GameController gc)
         {
             // Stash must stay open for incubator right-click
-            if (gc.IngameState.IngameUi.StashElement?.IsVisible != true)
+            if (!IsAnyStashVisible(gc))
             {
                 Status = "Stash closed — skipping incubators";
                 _phase = StashPhase.CloseStash;
@@ -758,19 +776,6 @@ namespace AutoExile.Systems
             }
 
             // Wait for batch to finish
-            if (_incubatorBatchRunning)
-                return StashResult.InProgress;
-
-            // If batch already ran, move to close
-            if (_incubatorsApplied > 0)
-            {
-                Status = $"Applied {_incubatorsApplied} incubators — closing stash";
-                _phase = StashPhase.CloseStash;
-                _phaseStartTime = DateTime.Now;
-                return StashResult.InProgress;
-            }
-
-            // Check we have both incubators and empty equipment slots
             if (FindEquipmentSlotToApply(gc) == null)
             {
                 Status = "All equipment has incubators — skipping";
@@ -889,7 +894,7 @@ namespace AutoExile.Systems
         {
             try
             {
-                var items = gc.IngameState.IngameUi.StashElement.VisibleStash?.VisibleInventoryItems;
+                var items = GetActiveStashElement(gc)?.VisibleStash?.VisibleInventoryItems;
                 if (items == null) return null;
 
                 foreach (var item in items)
@@ -970,9 +975,20 @@ namespace AutoExile.Systems
 
         private Entity? FindStashEntity(GameController gc)
         {
+            // 1. Ưu tiên Guild Stash
             foreach (var entity in gc.EntityListWrapper.OnlyValidEntities)
             {
-                if (entity.Type == EntityType.Stash && entity.IsTargetable)
+                if (entity.IsTargetable && (entity.Type == EntityType.GuildStash || 
+                    entity.Path.Contains("GuildStash", StringComparison.OrdinalIgnoreCase) ||
+                    entity.RenderName.Contains("Guild Stash", StringComparison.OrdinalIgnoreCase)))
+                    return entity;
+            }
+
+            // 2. Rương cá nhân thông thường
+            foreach (var entity in gc.EntityListWrapper.OnlyValidEntities)
+            {
+                if (entity.IsTargetable && (entity.Type == EntityType.Stash || 
+                    entity.Path.Contains("Stash", StringComparison.OrdinalIgnoreCase)))
                     return entity;
             }
             return null;
@@ -990,7 +1006,7 @@ namespace AutoExile.Systems
                 float yOffset = 200f;
 
                 // === Stash items ===
-                var stashItems = gc.IngameState.IngameUi.StashElement?.VisibleStash?.VisibleInventoryItems;
+                var stashItems = GetActiveStashElement(gc)?.VisibleStash?.VisibleInventoryItems;
                 if (stashItems != null)
                 {
                     g.DrawText("=== STASH ITEMS ===", new Vector2(10, yOffset), SharpDX.Color.Cyan);

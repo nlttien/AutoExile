@@ -307,7 +307,7 @@ namespace AutoExile.Modes.Shared
             }
 
             // Close any open panels (stash/inventory) before clicking portal
-            if (gc.IngameState.IngameUi.StashElement?.IsVisible == true ||
+            if (StashSystem.IsAnyStashVisible(gc) ||
                 gc.IngameState.IngameUi.InventoryPanel?.IsVisible == true)
             {
                 if (ModeHelpers.CanAct(_lastActionTime, ActionCooldownMs))

@@ -460,7 +460,7 @@ namespace AutoExile.Modes
             if (!ModeHelpers.CanAct(_lastActionTime, MajorActionCooldownMs)) return;
 
             // Close panels
-            if (gc.IngameState.IngameUi.StashElement?.IsVisible == true ||
+            if (StashSystem.IsAnyStashVisible(gc) ||
                 gc.IngameState.IngameUi.InventoryPanel?.IsVisible == true)
             {
                 BotInput.PressKey(Keys.Escape);
