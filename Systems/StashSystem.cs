@@ -174,6 +174,16 @@ namespace AutoExile.Systems
             return ingameUi.GuildStashElement?.IsVisible == true || ingameUi.StashElement?.IsVisible == true;
         }
 
+        public static bool IsGuildStashActive(GameController gc)
+        {
+            return gc?.IngameState?.IngameUi?.GuildStashElement?.IsVisible == true;
+        }
+
+        public int GetEffectiveActionCooldown(GameController gc)
+        {
+            return IsGuildStashActive(gc) ? Math.Max(ActionCooldownMs, 500) : ActionCooldownMs;
+        }
+
         /// <summary>
         /// Navigate to stash and open it — but don't deposit or withdraw anything.
         /// Returns Succeeded once the stash panel is open, Failed if unable to open.
@@ -208,7 +218,7 @@ namespace AutoExile.Systems
                 return StashResult.Failed;
             }
 
-            if ((DateTime.Now - _lastActionTime).TotalMilliseconds < ActionCooldownMs)
+            if ((DateTime.Now - _lastActionTime).TotalMilliseconds < GetEffectiveActionCooldown(gc))
                 return StashResult.InProgress;
 
             return _phase switch
@@ -231,7 +241,7 @@ namespace AutoExile.Systems
                 return StashResult.Failed;
             }
 
-            if ((DateTime.Now - _lastActionTime).TotalMilliseconds < ActionCooldownMs)
+            if ((DateTime.Now - _lastActionTime).TotalMilliseconds < GetEffectiveActionCooldown(gc))
                 return StashResult.InProgress;
 
             return _phase switch
@@ -457,8 +467,9 @@ namespace AutoExile.Systems
                 return StashResult.Failed;
             }
 
-            // Settle delay after each arrow press
-            if ((DateTime.Now - _lastActionTime).TotalMilliseconds < TabSwitchSettleMs)
+            // Settle delay after each arrow press (0.5s for Guild Stash)
+            var settleDelay = IsGuildStashActive(gc) ? 500f : TabSwitchSettleMs;
+            if ((DateTime.Now - _lastActionTime).TotalMilliseconds < settleDelay)
                 return StashResult.InProgress;
 
             // Press left or right arrow to move toward target tab
@@ -527,7 +538,7 @@ namespace AutoExile.Systems
             // Settle window after each batch — gives the UI time to update so
             // CountInventoryItems reflects the just-transferred items before we
             // launch another batch.
-            if ((DateTime.Now - _lastActionTime).TotalMilliseconds < ActionCooldownMs)
+            if ((DateTime.Now - _lastActionTime).TotalMilliseconds < GetEffectiveActionCooldown(gc))
                 return StashResult.InProgress;
 
             // Find ALL matching items in the visible stash tab. Batch-clicking ONE
@@ -567,7 +578,8 @@ namespace AutoExile.Systems
             // then releases. Items get transferred (stacks fully, single items one-per-click).
             // After the batch completes, IsBatchRunning flips back to false; the
             // settle window above lets inventory state catch up before we re-evaluate.
-            BotInput.CtrlClickBatch(positions);
+            int minBatchCooldown = IsGuildStashActive(gc) ? 500 : 0;
+            BotInput.CtrlClickBatch(positions, null, minBatchCooldown);
             _lastActionTime = DateTime.Now;
             return StashResult.InProgress;
         }
@@ -641,10 +653,11 @@ namespace AutoExile.Systems
 
             // Fire the batch — single async sequence: hold Ctrl → click all → release Ctrl
             Status = $"Storing {positions.Count} items...";
+            int minBatchCooldown = IsGuildStashActive(gc) ? 500 : 0;
             BotInput.CtrlClickBatch(positions, count =>
             {
                 _itemsStored = count;
-            });
+            }, minBatchCooldown);
             return StashResult.InProgress;
         }
 

@@ -1417,10 +1417,16 @@ namespace AutoExile.Systems
         /// Holds Ctrl down, clicks each position with randomized timing, then releases Ctrl.
         /// Bypasses the tick-level input gating — the sequence manages its own timing.
         /// Does not break out early; executes the full list.
+        /// <summary>
+        /// Asynchronously Ctrl+clicks a list of screen positions in a single batch:
+        /// presses Ctrl once, clicks each position with human-like delays, releases Ctrl.
+        /// Non-blocking — returns immediately. Check <see cref="IsBatchRunning"/> or use
+        /// the onComplete callback.
         /// </summary>
         /// <param name="positions">Absolute screen positions to Ctrl+click.</param>
         /// <param name="onComplete">Called when the batch finishes (success or empty).</param>
-        public static bool CtrlClickBatch(IReadOnlyList<Vector2> positions, Action<int>? onComplete = null)
+        /// <param name="minCooldownMs">Minimum cooldown between clicks (useful for Guild Stash 500ms+ delay).</param>
+        public static bool CtrlClickBatch(IReadOnlyList<Vector2> positions, Action<int>? onComplete = null, int minCooldownMs = 0)
         {
             if (IsBatchRunning) return false;
             if (positions.Count == 0)
@@ -1433,16 +1439,17 @@ namespace AutoExile.Systems
             ReleaseAllKeys();
             IsBatchRunning = true;
 
+            var effectiveCooldown = Math.Max(ActionCooldownMs, minCooldownMs);
             // Estimate total duration for gate: (move + settle + hold + cooldown) per item + ctrl hold/release
-            var totalMs = positions.Count * (MoveMaxMs + (int)SettleMeanMs + (int)HoldMeanMs + ActionCooldownMs) + 200;
+            var totalMs = positions.Count * (MoveMaxMs + (int)SettleMeanMs + (int)HoldMeanMs + effectiveCooldown) + 200;
             NextActionAt = DateTime.Now.AddMilliseconds(totalMs);
 
-            _ = DoCtrlClickBatch(positions, onComplete);
+            _ = DoCtrlClickBatch(positions, onComplete, effectiveCooldown);
             LogAction("CtrlClickBatch", null, null, true);
             return true;
         }
 
-        private static async Task DoCtrlClickBatch(IReadOnlyList<Vector2> positions, Action<int>? onComplete)
+        private static async Task DoCtrlClickBatch(IReadOnlyList<Vector2> positions, Action<int>? onComplete, int effectiveCooldown)
         {
             int clicked = 0;
             try
@@ -1471,9 +1478,9 @@ namespace AutoExile.Systems
 
                     clicked++;
 
-                    // Inter-item delay: random + action cooldown
+                    // Inter-item delay: random + effective cooldown
                     if (i < positions.Count - 1)
-                        await Task.Delay(ActionCooldownMs + _rng.Next(20, 80));
+                        await Task.Delay(effectiveCooldown + _rng.Next(20, 80));
                 }
 
                 // Release Ctrl
