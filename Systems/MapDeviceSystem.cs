@@ -575,7 +575,7 @@ namespace AutoExile.Systems
                 for (int i = 0; i < Math.Min(nodes.Count, 110); i++)
                 {
                     var name = nodes[i].Area?.Name;
-                    if (name != null && name.Equals(lookupNameBare, StringComparison.OrdinalIgnoreCase))
+                    if (name != null && name.Equals(lookupName, StringComparison.OrdinalIgnoreCase))
                     {
                         nodeIndex = i;
                         break;
