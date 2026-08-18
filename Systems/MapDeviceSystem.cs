@@ -1117,21 +1117,16 @@ namespace AutoExile.Systems
             if (bossContainer != null)
             {
                 // Direct index 155 check (The Searing Exarch / Absence of Patience and Wisdom)
-                if (bossContainer.ChildCount > 155)
+                if (lookupName.Contains("Absence", StringComparison.OrdinalIgnoreCase) ||
+                    lookupName.Contains("Exarch", StringComparison.OrdinalIgnoreCase) ||
+                    lookupName.Contains("Patience", StringComparison.OrdinalIgnoreCase) ||
+                    lookupName.Contains("Searing", StringComparison.OrdinalIgnoreCase))
                 {
-                    var direct155 = bossContainer.GetChildAtIndex(155);
-                    if (direct155 != null && direct155.IsVisible && direct155.IsActive)
+                    if (bossContainer.ChildCount > 155)
                     {
-                        var tt = direct155.Tooltip?.Text ?? direct155.Text ?? "";
-                        if (string.IsNullOrEmpty(lookupName) ||
-                            tt.Contains("Absence of Patience and Wisdom", StringComparison.OrdinalIgnoreCase) ||
-                            tt.Contains(lookupName, StringComparison.OrdinalIgnoreCase) ||
-                            lookupName.Contains("Absence", StringComparison.OrdinalIgnoreCase) ||
-                            lookupName.Contains("Searing", StringComparison.OrdinalIgnoreCase) ||
-                            lookupName.Contains("Exarch", StringComparison.OrdinalIgnoreCase))
-                        {
+                        var direct155 = bossContainer.GetChildAtIndex(155);
+                        if (direct155 != null && direct155.IsVisible)
                             return direct155;
-                        }
                     }
                 }
 
@@ -1140,12 +1135,12 @@ namespace AutoExile.Systems
                 {
                     foreach (var child in bossContainer.Children)
                     {
-                        if (child == null || !child.IsVisible || !child.IsActive) continue;
-                        var tt = child.Tooltip?.Text ?? child.Text ?? "";
-                        if (!string.IsNullOrEmpty(tt) && (
-                            tt.Contains(lookupName, StringComparison.OrdinalIgnoreCase) ||
-                            tt.Contains("Absence of Patience and Wisdom", StringComparison.OrdinalIgnoreCase) ||
-                            tt.Contains("The Searing Exarch", StringComparison.OrdinalIgnoreCase)))
+                        if (child == null || !child.IsVisible) continue;
+                        var text = GetAllElementText(child);
+                        if (!string.IsNullOrEmpty(text) && (
+                            text.Contains(lookupName, StringComparison.OrdinalIgnoreCase) ||
+                            text.Contains("Absence of Patience and Wisdom", StringComparison.OrdinalIgnoreCase) ||
+                            text.Contains("The Searing Exarch", StringComparison.OrdinalIgnoreCase)))
                         {
                             return child;
                         }
@@ -1153,23 +1148,39 @@ namespace AutoExile.Systems
                 }
             }
 
-            // 2. Fallback: search entire Atlas element recursively for element with matching Tooltip/Text
-            return FindChildByTooltip(atlas, lookupName);
+            // 2. Fallback: search entire Atlas element recursively for element with matching Text
+            return FindChildByTextRecursive(atlas, lookupName);
         }
 
-        private static Element? FindChildByTooltip(Element root, string text)
+        private static string GetAllElementText(Element? el)
+        {
+            if (el == null) return "";
+            var sb = new System.Text.StringBuilder();
+            if (!string.IsNullOrEmpty(el.Text)) sb.Append(el.Text).Append(' ');
+            if (el.Tooltip != null) sb.Append(GetAllElementText(el.Tooltip)).Append(' ');
+            if (el.Children != null)
+            {
+                foreach (var c in el.Children)
+                {
+                    if (c != null && c.IsVisible)
+                        sb.Append(GetAllElementText(c)).Append(' ');
+                }
+            }
+            return sb.ToString();
+        }
+
+        private static Element? FindChildByTextRecursive(Element root, string text)
         {
             if (root == null || !root.IsVisible) return null;
-            if (root.Tooltip?.Text?.Contains(text, StringComparison.OrdinalIgnoreCase) == true)
-                return root;
-            if (root.Text?.Contains(text, StringComparison.OrdinalIgnoreCase) == true)
+            var allText = GetAllElementText(root);
+            if (allText.Contains(text, StringComparison.OrdinalIgnoreCase))
                 return root;
 
             if (root.Children != null)
             {
                 foreach (var child in root.Children)
                 {
-                    var found = FindChildByTooltip(child, text);
+                    var found = FindChildByTextRecursive(child, text);
                     if (found != null) return found;
                 }
             }
