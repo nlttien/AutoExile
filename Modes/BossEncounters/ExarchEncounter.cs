@@ -87,6 +87,8 @@ namespace AutoExile.Modes.BossEncounters
             WaitingForLoot
         }
 
+        private bool _hasEngagedBoss;
+
         public void OnEnterZone(BotContext ctx)
         {
             var gc = ctx.Game;
@@ -96,10 +98,11 @@ namespace AutoExile.Modes.BossEncounters
             _phaseStartTime = DateTime.Now;
             _bossEntity = null;
             _bossWasAlive = false;
+            _hasEngagedBoss = false;
             _exploreFails = 0;
             _lastPlayerGrid = new Vector2(gc.Player.GridPosNum.X, gc.Player.GridPosNum.Y);
-            Status = "Entered arena — moving to Searing Exarch";
-            ctx.Log($"[Exarch] Zone entered at ({_lastPlayerGrid.X:F0}, {_lastPlayerGrid.Y:F0})");
+            Status = "Entered arena — moving directly to Searing Exarch (252, 252)";
+            ctx.Log($"[Exarch] Zone entered at ({_lastPlayerGrid.X:F0}, {_lastPlayerGrid.Y:F0}) — navigating to boss center");
         }
 
         public BossEncounterResult Tick(BotContext ctx)
@@ -158,16 +161,20 @@ namespace AutoExile.Modes.BossEncounters
                 return BossEncounterResult.Failed;
             }
 
-            if (_bossEntity != null && _bossEntity.IsAlive && _bossEntity.IsTargetable)
+            var distToCenter = Vector2.Distance(playerGrid, ArenaCenterPos);
+
+            // Once close to the center and boss is ready, engage
+            if (distToCenter <= 25 || (_bossEntity != null && _bossEntity.IsAlive && _bossEntity.IsTargetable && distToCenter <= 35))
             {
                 _phase = ExarchPhase.Fighting;
                 _phaseStartTime = DateTime.Now;
-                ctx.Log($"[Exarch] Boss engaged: {_bossEntity.RenderName}");
+                _hasEngagedBoss = true;
+                ctx.Log($"[Exarch] Reached arena center ({playerGrid.X:F0}, {playerGrid.Y:F0}) — engaging Searing Exarch");
                 return BossEncounterResult.InProgress;
             }
 
-            var distToCenter = Vector2.Distance(playerGrid, ArenaCenterPos);
-            if (distToCenter > 12 && !ctx.Navigation.IsNavigating)
+            // Always navigate directly to arena center (252, 252)
+            if (!ctx.Navigation.IsNavigating)
             {
                 if (!ctx.Navigation.NavigateTo(gc, ArenaCenterPos))
                 {
@@ -177,7 +184,7 @@ namespace AutoExile.Modes.BossEncounters
                 }
             }
 
-            Status = $"Moving to Exarch ({distToCenter:F0}g)";
+            Status = $"Moving to Searing Exarch ({distToCenter:F0}g away)";
             return BossEncounterResult.InProgress;
         }
 
@@ -189,10 +196,20 @@ namespace AutoExile.Modes.BossEncounters
                 return BossEncounterResult.Failed;
             }
 
+            var distToCenter = Vector2.Distance(playerGrid, ArenaCenterPos);
+
+            // If player drifted too far from center, walk back
+            if (distToCenter > 50 && !ctx.Navigation.IsNavigating)
+            {
+                ctx.Navigation.NavigateTo(gc, ArenaCenterPos);
+                Status = $"Returning to center arena ({distToCenter:F0}g)";
+                return BossEncounterResult.InProgress;
+            }
+
             if (_bossEntity != null && _bossEntity.IsAlive)
             {
-                // Check if boss entered Ball Phase (Untargetable / Hidden)
-                if (!_bossEntity.IsTargetable || _bossEntity.IsHidden)
+                // Only enter Ball Phase if we have actually engaged the boss and are in the arena
+                if (_hasEngagedBoss && distToCenter <= 45 && (!_bossEntity.IsTargetable || _bossEntity.IsHidden))
                 {
                     _phase = ExarchPhase.BallPhase;
                     _phaseStartTime = DateTime.Now;
@@ -212,6 +229,9 @@ namespace AutoExile.Modes.BossEncounters
             }
             else
             {
+                if (distToCenter > 15 && !ctx.Navigation.IsNavigating)
+                    ctx.Navigation.NavigateTo(gc, ArenaCenterPos);
+
                 Status = "Fighting — waiting for Exarch";
             }
 
@@ -237,8 +257,12 @@ namespace AutoExile.Modes.BossEncounters
                 return BossEncounterResult.InProgress;
             }
 
-            // Hold position / dodge
-            ctx.Navigation.Stop(gc);
+            var distToCenter = Vector2.Distance(playerGrid, ArenaCenterPos);
+            if (distToCenter > 30 && !ctx.Navigation.IsNavigating)
+            {
+                ctx.Navigation.NavigateTo(gc, ArenaCenterPos);
+            }
+
             Status = $"Ball Phase active ({(45 - (DateTime.Now - _phaseStartTime).TotalSeconds):F0}s remaining)";
             return BossEncounterResult.InProgress;
         }
