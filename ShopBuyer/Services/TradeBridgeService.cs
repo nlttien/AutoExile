@@ -124,10 +124,11 @@ namespace AutoExile.ShopBuyer.Services
                 }
 
                 var workingDir = Path.GetDirectoryName(pythonScriptPath) ?? "";
+                var pythonExe = FindPythonExecutable();
 
                 var psi = new ProcessStartInfo
                 {
-                    FileName = "python",
+                    FileName = pythonExe,
                     Arguments = $"\"{pythonScriptPath}\"",
                     WorkingDirectory = workingDir,
                     UseShellExecute = false,
@@ -147,6 +148,39 @@ namespace AutoExile.ShopBuyer.Services
             {
                 return false;
             }
+        }
+
+        public static string FindPythonExecutable()
+        {
+            var localPythonDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Programs\Python");
+            if (Directory.Exists(localPythonDir))
+            {
+                try
+                {
+                    var found = Directory.GetFiles(localPythonDir, "python.exe", SearchOption.AllDirectories);
+                    if (found.Length > 0) return found[0];
+                }
+                catch { }
+            }
+
+            var candidates = new[]
+            {
+                @"C:\Users\Admin\AppData\Local\Programs\Python\Python314\python.exe",
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Programs\Python\Launcher\py.exe"),
+                @"C:\Program Files\Python314\python.exe",
+                @"C:\Program Files\Python312\python.exe",
+                @"C:\Program Files\Python311\python.exe",
+                @"C:\Program Files\Python310\python.exe",
+                "py",
+                "python"
+            };
+
+            foreach (var path in candidates)
+            {
+                if (File.Exists(path)) return path;
+            }
+
+            return "python";
         }
 
         public void StopWebTradeRunner()
