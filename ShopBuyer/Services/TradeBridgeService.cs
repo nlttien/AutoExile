@@ -130,7 +130,7 @@ namespace AutoExile.ShopBuyer.Services
                     FileName = "python",
                     Arguments = $"\"{pythonScriptPath}\"",
                     WorkingDirectory = workingDir,
-                    UseShellExecute = true,
+                    UseShellExecute = false,
                     CreateNoWindow = false
                 };
 
