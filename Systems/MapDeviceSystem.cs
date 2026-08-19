@@ -479,14 +479,15 @@ namespace AutoExile.Systems
 
                 // Inventory is open — find and click the matching item
                 bool foundAny = false;
-                var invItems = gc.IngameState.ServerData?.PlayerInventories?[0]?.Inventory?.InventorySlotItems;
+                var invZone = invPanel[ExileCore.Shared.Enums.InventoryIndex.PlayerInventory];
+                var invItems = invZone?.VisibleInventoryItems;
                 if (invItems != null)
                 {
                     foreach (var slotItem in invItems)
                     {
-                        var item = slotItem.Item;
-                        if (item?.Path == null) continue;
-                        if (!item.Path.Contains(_inventoryFragmentPath, StringComparison.OrdinalIgnoreCase))
+                        var path = slotItem.Item?.Path ?? slotItem.Entity?.Path;
+                        if (path == null) continue;
+                        if (!path.Contains(_inventoryFragmentPath, StringComparison.OrdinalIgnoreCase))
                             continue;
 
                         foundAny = true;
@@ -992,7 +993,8 @@ namespace AutoExile.Systems
             }
 
             // Find the first matching inventory item.
-            var invItems = gc.IngameState.ServerData?.PlayerInventories?[0]?.Inventory?.InventorySlotItems;
+            var invZone = gc.IngameState.IngameUi.InventoryPanel?[ExileCore.Shared.Enums.InventoryIndex.PlayerInventory];
+            var invItems = invZone?.VisibleInventoryItems;
             if (invItems == null)
             {
                 _phase = MapDevicePhase.Activate;
@@ -1001,11 +1003,11 @@ namespace AutoExile.Systems
                 return MapDeviceResult.InProgress;
             }
 
-            ExileCore.PoEMemory.MemoryObjects.ServerInventory.InventSlotItem? targetSlot = null;
+            ExileCore.PoEMemory.Elements.InventoryElements.NormalInventoryItem? targetSlot = null;
             string? matchedPath = null;
             foreach (var slotItem in invItems)
             {
-                var path = slotItem.Item?.Path;
+                var path = slotItem.Item?.Path ?? slotItem.Entity?.Path;
                 if (string.IsNullOrEmpty(path)) continue;
                 foreach (var sp in ScarabPaths)
                 {

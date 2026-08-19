@@ -1,6 +1,7 @@
 using ExileCore;
 using ExileCore.PoEMemory;
 using ExileCore.PoEMemory.MemoryObjects;
+using Life = ExileCore.PoEMemory.Components.Life;
 using ExileCore.Shared.Enums;
 using AutoExile.Systems;
 using System.Numerics;
@@ -89,6 +90,8 @@ namespace AutoExile.Modes.BossEncounters
         }
 
         private bool _hasEngagedBoss;
+        private DateTime _bossLastSeenAliveTime = DateTime.MinValue;
+        private DateTime _combatStartTime = DateTime.MinValue;
 
         public void OnEnterZone(BotContext ctx)
         {
@@ -97,13 +100,15 @@ namespace AutoExile.Modes.BossEncounters
 
             _phase = ExarchPhase.NavigateToCenter;
             _phaseStartTime = DateTime.Now;
+            _combatStartTime = DateTime.MinValue;
+            _bossLastSeenAliveTime = DateTime.MinValue;
             _bossEntity = null;
             _bossWasAlive = false;
             _hasEngagedBoss = false;
             _exploreFails = 0;
             _lastPlayerGrid = new Vector2(gc.Player.GridPosNum.X, gc.Player.GridPosNum.Y);
-            Status = "Entered arena — moving directly to Searing Exarch (252, 252)";
-            ctx.Log($"[Exarch] Zone entered at ({_lastPlayerGrid.X:F0}, {_lastPlayerGrid.Y:F0}) — navigating to boss center");
+            Status = "Entered arena — moving close to Searing Exarch (12 units range)";
+            ctx.Log($"[Exarch] Zone entered at ({_lastPlayerGrid.X:F0}, {_lastPlayerGrid.Y:F0}) — moving close to boss");
         }
 
         public BossEncounterResult Tick(BotContext ctx)
@@ -123,22 +128,12 @@ namespace AutoExile.Modes.BossEncounters
 
                 if (_bossEntity != null)
                 {
-                    bool isAlive = _bossEntity.IsAlive && !_bossEntity.IsDead;
-
-                    if (isAlive)
+                    var life = _bossEntity.GetComponent<Life>();
+                    if (life != null && life.CurHP > 0)
                     {
                         _bossWasAlive = true;
-                    }
-                    else if (_bossWasAlive || !_bossEntity.IsAlive || _bossEntity.IsDead)
-                    {
-                        // Boss is confirmed dead!
-                        BotInput.ReleaseRightClick();
-                        _phase = ExarchPhase.WaitingForLoot;
-                        _phaseStartTime = DateTime.Now;
+                        _bossLastSeenAliveTime = DateTime.Now;
                         _bossDeathPos = new Vector2(_bossEntity.GridPosNum.X, _bossEntity.GridPosNum.Y);
-                        Status = "Searing Exarch defeated — sweeping loot";
-                        ctx.Log("[Exarch] Boss killed, waiting for loot drops");
-                        return BossEncounterResult.InProgress;
                     }
                 }
             }
@@ -148,9 +143,8 @@ namespace AutoExile.Modes.BossEncounters
                 case ExarchPhase.NavigateToCenter:
                     return TickNavigateToCenter(ctx, gc, playerGrid);
                 case ExarchPhase.Fighting:
-                    return TickFighting(ctx, gc, playerGrid);
                 case ExarchPhase.BallPhase:
-                    return TickBallPhase(ctx, gc, playerGrid);
+                    return TickFighting(ctx, gc, playerGrid);
                 case ExarchPhase.WaitingForLoot:
                     return TickWaitingForLoot(ctx, gc, playerGrid);
                 default:
@@ -158,38 +152,67 @@ namespace AutoExile.Modes.BossEncounters
             }
         }
 
+        private const float CombatCloseRange = 12f;
+
         private BossEncounterResult TickNavigateToCenter(BotContext ctx, GameController gc, Vector2 playerGrid)
         {
             if ((DateTime.Now - _phaseStartTime).TotalSeconds > 60)
             {
+                BotInput.ReleaseRightClick();
                 Status = "Timeout navigating to center";
                 return BossEncounterResult.Failed;
             }
 
-            var distToCenter = Vector2.Distance(playerGrid, ArenaCenterPos);
+            var targetGrid = _bossEntity != null
+                ? new Vector2(_bossEntity.GridPosNum.X, _bossEntity.GridPosNum.Y)
+                : ArenaCenterPos;
 
-            // Once close to the center and boss is ready, engage
-            if (distToCenter <= 25 || (_bossEntity != null && _bossEntity.IsAlive && _bossEntity.IsTargetable && distToCenter <= 35))
+            var distToTarget = Vector2.Distance(playerGrid, targetGrid);
+
+            // Calculate target screen position for pre-casting
+            var cam = gc.IngameState.Camera;
+            var targetWorld = _bossEntity != null
+                ? _bossEntity.BoundsCenterPosNum
+                : Pathfinding.GridToWorld3D(gc, targetGrid);
+            var centerScreen = cam.WorldToScreen(targetWorld);
+            var windowRect = gc.Window.GetWindowRectangle(); 
+            var targetScreenPos = new Vector2(windowRect.X + centerScreen.X, windowRect.Y + centerScreen.Y);
+
+            // Pre-cast skills onto boss spawn point as we get closer (<= 45 units) before boss appears
+            if (distToTarget <= 45)
             {
+                CastMainSkill(ctx, targetScreenPos);
+            }
+
+            // Move to close range (<= 12 units) before stopping to fight
+            if (distToTarget <= CombatCloseRange)
+            {
+                ctx.Navigation.Stop(gc);
                 _phase = ExarchPhase.Fighting;
                 _phaseStartTime = DateTime.Now;
+                _combatStartTime = DateTime.Now;
                 _hasEngagedBoss = true;
-                ctx.Log($"[Exarch] Reached arena center ({playerGrid.X:F0}, {playerGrid.Y:F0}) — engaging Searing Exarch");
+                ctx.Log($"[Exarch] Reached close combat position ({distToTarget:F0}g <= {CombatCloseRange:F0}g) — engaging Searing Exarch");
                 return BossEncounterResult.InProgress;
             }
 
-            // Always navigate directly to arena center (252, 252)
+            // Navigate directly to boss/arena center
             if (!ctx.Navigation.IsNavigating)
             {
-                if (!ctx.Navigation.NavigateTo(gc, ArenaCenterPos))
+                if (!ctx.Navigation.NavigateTo(gc, targetGrid))
                 {
                     _exploreFails++;
                     if (_exploreFails > 10)
+                    {
+                        BotInput.ReleaseRightClick();
                         return BossEncounterResult.Failed;
+                    }
                 }
             }
 
-            Status = $"Moving to Searing Exarch ({distToCenter:F0}g away)";
+            Status = distToTarget <= 45
+                ? $"Pre-casting skills & advancing ({distToTarget:F0}g away)"
+                : $"Moving close to Searing Exarch ({distToTarget:F0}g away, target: <= {CombatCloseRange:F0}g)";
             return BossEncounterResult.InProgress;
         }
 
@@ -202,28 +225,38 @@ namespace AutoExile.Modes.BossEncounters
                 return BossEncounterResult.Failed;
             }
 
-            var distToCenter = Vector2.Distance(playerGrid, ArenaCenterPos);
+            var targetGrid = _bossEntity != null
+                ? new Vector2(_bossEntity.GridPosNum.X, _bossEntity.GridPosNum.Y)
+                : ArenaCenterPos;
 
-            // Check if boss died
-            if (_bossEntity != null && (!_bossEntity.IsAlive || _bossEntity.IsDead))
+            var distToTarget = Vector2.Distance(playerGrid, targetGrid);
+
+            // Check if boss is dead: only when CurHP <= 0 or IsDead is true
+            bool isBossDead = false;
+            if (_bossEntity != null)
+            {
+                var life = _bossEntity.GetComponent<Life>();
+                if (_bossEntity.IsDead || (life != null && life.CurHP <= 0 && _bossWasAlive))
+                {
+                    isBossDead = true;
+                }
+            }
+            else if (_bossWasAlive && _bossLastSeenAliveTime != DateTime.MinValue &&
+                     (DateTime.Now - _bossLastSeenAliveTime).TotalSeconds > 5.0 &&
+                     (DateTime.Now - _combatStartTime).TotalSeconds > 5.0)
+            {
+                // Boss entity despawned after active combat
+                isBossDead = true;
+            }
+
+            if (isBossDead)
             {
                 BotInput.ReleaseRightClick();
                 _phase = ExarchPhase.WaitingForLoot;
                 _phaseStartTime = DateTime.Now;
-                _bossDeathPos = new Vector2(_bossEntity.GridPosNum.X, _bossEntity.GridPosNum.Y);
+                _bossDeathPos ??= ArenaCenterPos;
                 Status = "Searing Exarch defeated — sweeping loot";
                 ctx.Log("[Exarch] Boss confirmed dead, switching to loot phase");
-                return BossEncounterResult.InProgress;
-            }
-
-            // If in Ball Phase
-            if (_bossEntity != null && _hasEngagedBoss && distToCenter <= 45 && (!_bossEntity.IsTargetable || _bossEntity.IsHidden))
-            {
-                BotInput.ReleaseRightClick();
-                _phase = ExarchPhase.BallPhase;
-                _phaseStartTime = DateTime.Now;
-                Status = "Exarch Ball Phase — dodging meteors";
-                ctx.Log("[Exarch] Boss became untargetable, entering Ball Phase");
                 return BossEncounterResult.InProgress;
             }
 
@@ -231,10 +264,8 @@ namespace AutoExile.Modes.BossEncounters
             var cam = gc.IngameState.Camera;
             Vector2 targetScreenPos;
 
-            if (_bossEntity != null && _bossEntity.IsAlive && !_bossEntity.IsDead)
+            if (_bossEntity != null)
             {
-                var bossGrid = new Vector2(_bossEntity.GridPosNum.X, _bossEntity.GridPosNum.Y);
-                _bossDeathPos = bossGrid;
                 var bossWorld = _bossEntity.BoundsCenterPosNum;
                 var bossScreen = cam.WorldToScreen(bossWorld);
                 var windowRect = gc.Window.GetWindowRectangle();
@@ -242,29 +273,77 @@ namespace AutoExile.Modes.BossEncounters
             }
             else
             {
-                var centerWorld = Pathfinding.GridToWorld3D(gc, ArenaCenterPos);
+                var centerWorld = Pathfinding.GridToWorld3D(gc, targetGrid);
                 var centerScreen = cam.WorldToScreen(centerWorld);
-                var windowRect = gc.Window.GetWindowRectangle();
+                var windowRect = gc.Window.GetWindowRectangle(); 
                 targetScreenPos = new Vector2(windowRect.X + centerScreen.X, windowRect.Y + centerScreen.Y);
             }
 
-            // When at boss position: STAND STILL IN PLACE AND CAST/THROW CONTINUOUSLY
-            if (distToCenter <= 30)
+            // Continuously cast attack/spell/trap skills on Boss non-stop until boss is dead
+            CastMainSkill(ctx, targetScreenPos);
+
+            // Stand still if within close range, otherwise step closer
+            if (distToTarget > CombatCloseRange)
             {
-                ctx.Navigation.Stop(gc);
-                BotInput.CastRightClickAt(targetScreenPos);
-                Status = $"Casting continuously at Searing Exarch (standing in place at {playerGrid.X:F0}, {playerGrid.Y:F0})";
+                if (!ctx.Navigation.IsNavigating)
+                    ctx.Navigation.NavigateTo(gc, targetGrid);
+                Status = $"Casting & closing in ({distToTarget:F0}g > {CombatCloseRange:F0}g)";
             }
             else
             {
-                // Move towards center while casting
-                if (!ctx.Navigation.IsNavigating)
-                    ctx.Navigation.NavigateTo(gc, ArenaCenterPos);
-                BotInput.CastRightClickAt(targetScreenPos);
-                Status = $"Moving to boss and casting ({distToCenter:F0}g away)";
+                ctx.Navigation.Stop(gc);
+                var life = _bossEntity?.GetComponent<Life>();
+                var hpText = life != null && life.MaxHP > 0
+                    ? $" [{(float)life.CurHP / life.MaxHP * 100f:F0}% HP]"
+                    : "";
+                Status = $"Standing close ({distToTarget:F0}g) & casting at Searing Exarch{hpText}";
             }
 
             return BossEncounterResult.InProgress;
+        }
+
+        private static DateTime _lastCastTime = DateTime.MinValue;
+
+        private static void CastMainSkill(BotContext ctx, Vector2 targetScreenPos)
+        {
+            if ((DateTime.Now - _lastCastTime).TotalMilliseconds < 100)
+                return;
+            _lastCastTime = DateTime.Now;
+
+            // Move cursor to boss screen position
+            if (BotInput.ClampToWindow(ref targetScreenPos))
+            {
+                Input.SetCursorPos(targetScreenPos);
+            }
+
+            var enemySkills = ctx.Settings.Build.AllSkillSlots
+                .Where(s => s.Key.Value != System.Windows.Forms.Keys.None && s.Role.Value == SkillRole.Enemy.ToString())
+                .OrderByDescending(s => s.Priority.Value)
+                .ToList();
+
+            if (enemySkills.Count > 0)
+            {
+                foreach (var s in enemySkills)
+                {
+                    var key = s.Key.Value;
+                    if (key == System.Windows.Forms.Keys.RButton)
+                    {
+                        Input.RightDown();
+                        Task.Delay(35).ContinueWith(_ => Input.RightUp());
+                    }
+                    else
+                    {
+                        Input.KeyDown(key);
+                        Task.Delay(35).ContinueWith(_ => Input.KeyUp(key));
+                    }
+                }
+            }
+            else
+            {
+                // Default fallback: Right Click
+                Input.RightDown();
+                Task.Delay(35).ContinueWith(_ => Input.RightUp());
+            }
         }
 
         private BossEncounterResult TickBallPhase(BotContext ctx, GameController gc, Vector2 playerGrid)
@@ -301,17 +380,17 @@ namespace AutoExile.Modes.BossEncounters
         private BossEncounterResult TickWaitingForLoot(BotContext ctx, GameController gc, Vector2 playerGrid)
         {
             BotInput.ReleaseRightClick();
-            var timeout = ctx.Settings.Run.LootSweepTimeoutSeconds.Value;
+            var timeout = 1.0f; // 1s quick loot then exit
             var elapsed = (DateTime.Now - _phaseStartTime).TotalSeconds;
 
-            if (elapsed > timeout)
+            if (elapsed >= timeout)
             {
-                ctx.Log("[Exarch] Loot sweep finished — signaling Complete");
+                ctx.Log("[Exarch] 1s loot sweep finished — signaling Complete to exit");
                 return BossEncounterResult.Complete;
             }
 
-            var remaining = timeout - elapsed;
-            var countdown = $"({remaining:F0}s left)";
+            var remaining = Math.Max(0, timeout - elapsed);
+            var countdown = $"({remaining:F1}s left)";
 
             if (_bossDeathPos.HasValue)
             {
@@ -320,7 +399,7 @@ namespace AutoExile.Modes.BossEncounters
                     ctx.Navigation.NavigateTo(gc, _bossDeathPos.Value);
             }
 
-            if ((DateTime.Now - _lastLootScan).TotalMilliseconds >= 500)
+            if ((DateTime.Now - _lastLootScan).TotalMilliseconds >= 200)
             {
                 ctx.Loot.Scan(gc);
                 _lastLootScan = DateTime.Now;
@@ -353,20 +432,23 @@ namespace AutoExile.Modes.BossEncounters
                 return BossEncounterResult.InProgress;
             }
 
-            Status = $"Waiting for loot {countdown}";
+            Status = $"Quick 1s loot {countdown}";
             return BossEncounterResult.InProgress;
         }
 
         private Entity? FindBoss(GameController gc)
         {
-            foreach (var entity in gc.EntityListWrapper.ValidEntitiesByType[EntityType.Monster])
+            try
             {
-                if (!entity.IsHostile) continue;
-                if (entity.Rarity != MonsterRarity.Unique) continue;
+                foreach (var entity in gc.EntityListWrapper.ValidEntitiesByType[EntityType.Monster])
+                {
+                    if (entity.Rarity != MonsterRarity.Unique) continue;
 
-                if (entity.Path.Contains(BossPath))
-                    return entity;
+                    if (entity.Path != null && entity.Path.Contains(BossPath, StringComparison.OrdinalIgnoreCase))
+                        return entity;
+                }
             }
+            catch { }
             return null;
         }
 
@@ -391,16 +473,45 @@ namespace AutoExile.Modes.BossEncounters
             var cam = gc.IngameState.Camera;
             var playerGrid = new Vector2(gc.Player.GridPosNum.X, gc.Player.GridPosNum.Y);
 
-            // Boss marker
+            // Boss marker (Màu đỏ khi sống / chuẩn bị xuất hiện, Màu xanh khi đã chết)
+            bool isBossDead = _phase == ExarchPhase.WaitingForLoot;
             if (_bossEntity != null)
             {
+                var life = _bossEntity.GetComponent<Life>();
+                if (_bossEntity.IsDead || (life != null && life.CurHP <= 0 && _bossWasAlive))
+                {
+                    isBossDead = true;
+                }
+            }
+
+            if (isBossDead)
+            {
+                var deathPos = _bossDeathPos ?? (_bossEntity != null ? new Vector2(_bossEntity.GridPosNum.X, _bossEntity.GridPosNum.Y) : ArenaCenterPos);
+                var world = Pathfinding.GridToWorld3D(gc, deathPos);
+                var screen = cam.WorldToScreen(world);
+                if (screen.X > -200 && screen.X < 2400)
+                {
+                    g.DrawText("THE SEARING EXARCH (ĐÃ CHẾT)", screen + new Vector2(-70, -30), SharpDX.Color.LimeGreen);
+                }
+            }
+            else if (_bossEntity != null)
+            {
+                var life = _bossEntity.GetComponent<Life>();
+                var hpText = life != null && life.MaxHP > 0 ? $" [{(float)life.CurHP / life.MaxHP * 100f:F0}%]" : "";
                 var world = _bossEntity.BoundsCenterPosNum;
                 var screen = cam.WorldToScreen(world);
                 if (screen.X > -200 && screen.X < 2400)
                 {
-                    var color = _bossEntity.IsAlive ? SharpDX.Color.Red : SharpDX.Color.LimeGreen;
-                    g.DrawText(_bossEntity.IsAlive ? "THE SEARING EXARCH" : "EXARCH (DEAD)",
-                        screen + new Vector2(-40, -30), color);
+                    g.DrawText($"THE SEARING EXARCH{hpText}", screen + new Vector2(-50, -30), SharpDX.Color.Red);
+                }
+            }
+            else if (_phase == ExarchPhase.NavigateToCenter || _phase == ExarchPhase.Fighting)
+            {
+                var world = Pathfinding.GridToWorld3D(gc, ArenaCenterPos);
+                var screen = cam.WorldToScreen(world);
+                if (screen.X > -200 && screen.X < 2400)
+                {
+                    g.DrawText("THE SEARING EXARCH (CHUẨN BỊ RA)", screen + new Vector2(-80, -30), SharpDX.Color.Red);
                 }
             }
 
@@ -427,6 +538,8 @@ namespace AutoExile.Modes.BossEncounters
             _bossEntity = null;
             _bossWasAlive = false;
             _hasEngagedBoss = false;
+            _bossLastSeenAliveTime = DateTime.MinValue;
+            _combatStartTime = DateTime.MinValue;
             _exploreFails = 0;
             _lastPlayerGrid = Vector2.Zero;
             _bossDeathPos = null;

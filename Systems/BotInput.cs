@@ -43,7 +43,7 @@ namespace AutoExile.Systems
         /// Clamp a position to stay within the game window (with padding to avoid edge pixels).
         /// Returns false if WindowRect is unset (zero-size).
         /// </summary>
-        private static bool ClampToWindow(ref Vector2 pos)
+        public static bool ClampToWindow(ref Vector2 pos)
         {
             if (WindowRect.Width < 10 || WindowRect.Height < 10)
                 return false; // window rect not set or too small
@@ -509,6 +509,16 @@ namespace AutoExile.Systems
 
         private static void SendKeyDown(Keys key, string context = "")
         {
+            if (key == Keys.RButton)
+            {
+                SendRightDown(context);
+                return;
+            }
+            if (key == Keys.LButton)
+            {
+                SendLeftDown(context);
+                return;
+            }
             if (!CanSendInputEvent)
             {
                 LogRawInput("KeyDown-DROPPED", $"{key} {context} (too soon: {(DateTime.Now - _lastInputEvent).TotalMilliseconds:F0}ms)".Trim());
@@ -520,6 +530,16 @@ namespace AutoExile.Systems
 
         private static void SendKeyUp(Keys key, string context = "")
         {
+            if (key == Keys.RButton)
+            {
+                SendRightUp(context);
+                return;
+            }
+            if (key == Keys.LButton)
+            {
+                SendLeftUp(context);
+                return;
+            }
             MarkInputEvent("KeyUp", $"{key} {context}".Trim());
             Input.KeyUp(key);
         }
@@ -562,20 +582,21 @@ namespace AutoExile.Systems
         public static bool IsRightClickHeld => _isRightClickHeld;
 
         /// <summary>
-        /// Continuously cast/throw Right Click skill at a specific screen position (e.g. traps, mines, spells, attacks).
-        /// Moves cursor to target and fires right-click down & up every tick.
+        /// Fast click Right Click at target screen position with proper hold duration.
+        /// Ideal for mine/trap throwing, spells, attacks on bosses.
         /// </summary>
-        public static bool CastRightClickAt(Vector2 absPos)
+        public static bool RapidRightClickAt(Vector2 absPos)
         {
             if (!ClampToWindow(ref absPos)) return false;
             Input.SetCursorPos(absPos);
-            SendRightDown("cast-right-down");
-            SendRightUp("cast-right-up");
+            Input.RightDown();
+            Task.Delay(35).ContinueWith(_ => Input.RightUp());
             return true;
         }
 
         /// <summary>
-        /// Continuously hold Right Click down at a specific screen position (e.g. channeling on a boss).
+        /// Continuously hold Right Click down at a specific screen position (e.g. channeling, throwing, attacking boss).
+        /// Updates cursor position to track target while keeping Right Click held down.
         /// </summary>
         public static bool HoldRightClickAt(Vector2 absPos)
         {
@@ -583,8 +604,9 @@ namespace AutoExile.Systems
             Input.SetCursorPos(absPos);
             if (!_isRightClickHeld)
             {
-                SendRightDown("hold-right");
+                Input.RightDown();
                 _isRightClickHeld = true;
+                MarkInputEvent("RightDown", "hold-right");
             }
             return true;
         }
@@ -596,8 +618,9 @@ namespace AutoExile.Systems
         {
             if (_isRightClickHeld)
             {
-                SendRightUp("release-right");
+                Input.RightUp();
                 _isRightClickHeld = false;
+                MarkInputEvent("RightUp", "release-right");
             }
         }
 

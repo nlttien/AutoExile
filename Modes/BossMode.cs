@@ -346,10 +346,11 @@ namespace AutoExile.Modes
             {
                 case BossEncounterResult.Complete:
                     _mapCompleted = true;
-                    _phase = BossPhase.LootSweep;
+                    _phase = BossPhase.ExitMap;
                     _phaseStartTime = DateTime.Now;
+                    _exitPortalAttempts = 0;
                     _lootTracker.ResetCount();
-                    ctx.Log($"[Boss] {_activeEncounter.Name} complete — looting");
+                    ctx.Log($"[Boss] {_activeEncounter.Name} complete — exiting to hideout");
                     break;
 
                 case BossEncounterResult.Failed:

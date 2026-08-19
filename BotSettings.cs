@@ -133,6 +133,10 @@ namespace AutoExile
 
         public FaustusSettings Faustus { get; set; } = new FaustusSettings();
 
+        // --- Auto Buy (In-game Shop & Web Trade) ---
+
+        public AutoBuySettings AutoBuy { get; set; } = new AutoBuySettings();
+
         // --- Notifications (Discord webhook) ---
 
         public NotificationSettings Notifications { get; set; } = new NotificationSettings();
@@ -140,6 +144,70 @@ namespace AutoExile
         // =====================================================================
         // Submenu classes
         // =====================================================================
+
+        [Submenu(CollapsedByDefault = false)]
+        public class AutoBuySettings
+        {
+            [Menu("Market Source", "0 = In-Game Shop (NPC / Vendor / Faustus), 1 = Web Trade (pathofexile.com/trade)")]
+            public RangeNode<int> MarketSource { get; set; } = new RangeNode<int>(0, 0, 1);
+
+            [Menu("Whitelist Base Names", "Comma-separated list of item base names to buy (e.g. Amethyst Ring, Heavy Belt, Uncut).")]
+            public TextNode WhitelistBaseNames { get; set; } = new TextNode("Amethyst Ring, Heavy Belt, Two-Stone Ring, Uncut");
+
+            [Menu("Match Normal", "Buy Normal (White) items.")]
+            public ToggleNode MatchNormal { get; set; } = new ToggleNode(true);
+
+            [Menu("Match Magic", "Buy Magic (Blue) items.")]
+            public ToggleNode MatchMagic { get; set; } = new ToggleNode(true);
+
+            [Menu("Match Rare", "Buy Rare (Yellow) items.")]
+            public ToggleNode MatchRare { get; set; } = new ToggleNode(true);
+
+            [Menu("Match Unique", "Buy Unique (Brown) items.")]
+            public ToggleNode MatchUnique { get; set; } = new ToggleNode(true);
+
+            [Menu("Min Item Level", "Minimum item level required to buy.")]
+            public RangeNode<int> MinItemLevel { get; set; } = new RangeNode<int>(0, 0, 100);
+
+            [Menu("Min Quality", "Minimum quality % required to buy.")]
+            public RangeNode<int> MinQuality { get; set; } = new RangeNode<int>(0, 0, 30);
+
+            [Menu("Min Sockets", "Minimum sockets required (e.g. 6 for 6-socket items).")]
+            public RangeNode<int> MinSockets { get; set; } = new RangeNode<int>(0, 0, 6);
+
+            [Menu("Min Links", "Minimum links required (e.g. 6 for 6-link items).")]
+            public RangeNode<int> MinLinks { get; set; } = new RangeNode<int>(0, 0, 6);
+
+            [Menu("Require RGB Sockets", "Only buy items with Red-Green-Blue linked sockets (Chromatic recipe).")]
+            public ToggleNode RequireRgbSockets { get; set; } = new ToggleNode(false);
+
+            [Menu("Check Max Price", "Enable maximum price limit check before buying.")]
+            public ToggleNode CheckMaxPrice { get; set; } = new ToggleNode(false);
+
+            [Menu("Max Chaos Price", "Maximum price in Chaos Orbs.")]
+            public RangeNode<int> MaxChaosPrice { get; set; } = new RangeNode<int>(5000, 0, 50000);
+
+            [Menu("Max Gold Price", "Maximum price in Gold.")]
+            public RangeNode<int> MaxGoldPrice { get; set; } = new RangeNode<int>(50000, 0, 1000000);
+
+            [Menu("Scan All Tabs", "Automatically switch and scan through all tabs in the shop.")]
+            public ToggleNode ScanAllTabs { get; set; } = new ToggleNode(false);
+
+            [Menu("Highlight Only", "Preview / highlight matching items without actually clicking buy.")]
+            public ToggleNode HighlightOnly { get; set; } = new ToggleNode(false);
+
+            [Menu("Target Web Trade URL", "The search URL on pathofexile.com/trade to buy from.")]
+            public TextNode TargetTradeUrl { get; set; } = new TextNode("https://www.pathofexile.com/trade/search/Allflame/eRDVrqvWFL");
+
+            [Menu("Python Script Path", "Path to open_profile.py in autobuypoe directory.")]
+            public TextNode PythonScriptPath { get; set; } = new TextNode(@"D:\codecuatien\autobuypoe\open_profile.py");
+
+            [Menu("Pause Hotkey (F7)", "Hotkey to pause / resume auto-buy.")]
+            public HotkeyNode PauseHotkey { get; set; } = new HotkeyNode(Keys.F7);
+
+            [Menu("Test Deposit Hotkey (F6)", "Hotkey to test returning to Hideout and depositing to Stash.")]
+            public HotkeyNode TestDepositHotkey { get; set; } = new HotkeyNode(Keys.F6);
+        }
 
         [Submenu(CollapsedByDefault = false)]
         public class BuildSettings

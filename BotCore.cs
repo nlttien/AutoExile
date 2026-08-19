@@ -84,6 +84,7 @@ namespace AutoExile
         private HeistMode? _heistMode;
         private LabyrinthMode? _labyrinthMode;
         private BossMode? _bossMode;
+        private AutoBuyMode? _autoBuyMode;
 
         // Area change tracking for tile map reload
         private string _lastAreaName = "";
@@ -188,6 +189,10 @@ namespace AutoExile
             waveFarm.Register(new Modes.WaveFarm.FarmPlans.AlchAndGoPlan());
             waveFarm.Register(new Modes.WaveFarm.FarmPlans.StackedDeckPlan());
             RegisterMode(waveFarm);
+
+            // AutoBuy Mode (In-Game Shop & Web Trade)
+            _autoBuyMode = new AutoBuyMode();
+            RegisterMode(_autoBuyMode);
 
             // Picking a farm strategy in the web UI auto-applies that plan's defaults
             // (scarab slots, altar mod weights). Fires regardless of current bot mode
@@ -953,6 +958,80 @@ namespace AutoExile
 
             ImGui.Separator();
             ImGui.Text($"Mode: {_mode.Name} | Running: {Settings.Running.Value}");
+
+            // =================================================================
+            // AutoBuy Controls
+            // =================================================================
+            if (ImGui.TreeNodeEx("Auto Buy (PoE 1 & Web Trade)", ImGuiTreeNodeFlags.DefaultOpen))
+            {
+                var autoBuy = Settings.AutoBuy;
+
+                // Mode Selector
+                var marketMode = autoBuy.MarketSource.Value;
+                var marketModeNames = new[] { "In-Game Shop (NPC / Vendor / Faustus)", "Web Trade (pathofexile.com/trade)" };
+                if (ImGui.Combo("Market Source", ref marketMode, marketModeNames, marketModeNames.Length))
+                {
+                    autoBuy.MarketSource.Value = marketMode;
+                }
+
+                if (marketMode == 1) // Web Trade
+                {
+                    var isWebRunning = _autoBuyMode?.TradeBridge.IsWebTradeRunning == true;
+                    if (isWebRunning)
+                    {
+                        ImGui.TextColored(new Vector4(0f, 1f, 0.4f, 1f), "● Web Trade Runner is RUNNING");
+                        if (ImGui.Button("Stop Web Trade Runner"))
+                        {
+                            _autoBuyMode?.TradeBridge.StopWebTradeRunner();
+                        }
+                    }
+                    else
+                    {
+                        ImGui.TextColored(new Vector4(1f, 0.5f, 0.2f, 1f), "○ Web Trade Runner is STOPPED");
+                        if (ImGui.Button("Start Web Trade Runner (Chrome)"))
+                        {
+                            _autoBuyMode?.TradeBridge.StartWebTradeRunner(
+                                autoBuy.PythonScriptPath.Value,
+                                autoBuy.TargetTradeUrl.Value
+                            );
+                        }
+                    }
+
+                    var scriptPath = autoBuy.PythonScriptPath.Value;
+                    if (ImGui.InputText("Python Script Path", ref scriptPath, 260))
+                        autoBuy.PythonScriptPath.Value = scriptPath;
+
+                    var tradeUrl = autoBuy.TargetTradeUrl.Value;
+                    if (ImGui.InputText("Target Trade URL", ref tradeUrl, 500))
+                        autoBuy.TargetTradeUrl.Value = tradeUrl;
+                }
+
+                var whitelist = autoBuy.WhitelistBaseNames.Value;
+                if (ImGui.InputText("Whitelist Base Names", ref whitelist, 500))
+                    autoBuy.WhitelistBaseNames.Value = whitelist;
+
+                var scanAll = autoBuy.ScanAllTabs.Value;
+                if (ImGui.Checkbox("Scan All Shop Tabs", ref scanAll))
+                    autoBuy.ScanAllTabs.Value = scanAll;
+
+                var highlightOnly = autoBuy.HighlightOnly.Value;
+                if (ImGui.Checkbox("Highlight Only (Preview)", ref highlightOnly))
+                    autoBuy.HighlightOnly.Value = highlightOnly;
+
+                ImGui.TextColored(new Vector4(0.8f, 0.8f, 0.8f, 1f), "Hotkeys: [F7] Pause / Resume | [F6] Test Stash Deposit");
+
+                if (AutoExile.ShopBuyer.Services.PurchaseExecutor.RecentPurchases.Count > 0)
+                {
+                    ImGui.Separator();
+                    ImGui.TextColored(new Vector4(0.4f, 0.9f, 1f, 1f), "Recent Purchases:");
+                    for (int i = 0; i < Math.Min(5, AutoExile.ShopBuyer.Services.PurchaseExecutor.RecentPurchases.Count); i++)
+                    {
+                        ImGui.TextUnformatted(AutoExile.ShopBuyer.Services.PurchaseExecutor.RecentPurchases[i]);
+                    }
+                }
+
+                ImGui.TreePop();
+            }
         }
 
         // =================================================================
