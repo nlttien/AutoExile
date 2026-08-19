@@ -279,19 +279,26 @@ namespace AutoExile.Modes
             try
             {
                 var gc = ctx.Game;
-                ctx.Log("[AutoBuy] Executing stash deposit...");
+                ctx.Log("[AutoBuy] Executing stash deposit — returning to Hideout...");
 
                 // Close any open windows with Space
                 Input.KeyDown(Keys.Space);
                 Thread.Sleep(40);
                 Input.KeyUp(Keys.Space);
+                Thread.Sleep(150);
+
+                // 1. Try click Leave Hideout button if in seller hideout
+                TryClickLeaveHideoutButton(gc);
+
+                // 2. Type /hideout command directly in chat
+                SendHideoutChatCommand();
                 Thread.Sleep(200);
 
-                // Press F2 to teleport back to hideout if macro bound
+                // 3. Press F2 as well
                 Input.KeyDown(Keys.F2);
-                Thread.Sleep(50);
+                Thread.Sleep(40);
                 Input.KeyUp(Keys.F2);
-                Thread.Sleep(1500);
+                Thread.Sleep(2000);
 
                 // Execute stash deposit via StashSystem
                 ctx.Stash.Tick(ctx.Game, ctx.Navigation);
@@ -300,6 +307,82 @@ namespace AutoExile.Modes
             {
                 ctx.Log($"[AutoBuy] Deposit error: {ex.Message}");
             }
+        }
+
+        private static bool TryClickLeaveHideoutButton(GameController? gc)
+        {
+            try
+            {
+                var ingameUi = gc?.IngameState?.IngameUi ?? gc?.Game?.IngameState?.IngameUi;
+                if (ingameUi == null) return false;
+
+                var leaveBtn = FindElementWithText(ingameUi, "LEAVE HIDEOUT") ?? FindElementWithText(ingameUi, "Leave Hideout");
+                if (leaveBtn != null && leaveBtn.IsValid && leaveBtn.IsVisible)
+                {
+                    var rect = leaveBtn.GetClientRect();
+                    if (rect.Width > 0 && rect.Height > 0)
+                    {
+                        MouseHelper.LeftClickAt(new Vector2(rect.Center.X, rect.Center.Y), 50, 30);
+                        return true;
+                    }
+                }
+            }
+            catch { }
+            return false;
+        }
+
+        private static ExileCore.PoEMemory.Element? FindElementWithText(ExileCore.PoEMemory.Element? root, string text)
+        {
+            if (root == null || !root.IsValid || !root.IsVisible) return null;
+            if (string.Equals(root.Text?.Trim(), text, StringComparison.OrdinalIgnoreCase)) return root;
+
+            if (root.Children != null)
+            {
+                foreach (var child in root.Children)
+                {
+                    var found = FindElementWithText(child, text);
+                    if (found != null) return found;
+                }
+            }
+            return null;
+        }
+
+        private static void SendHideoutChatCommand()
+        {
+            try
+            {
+                Input.KeyDown(Keys.Enter);
+                Thread.Sleep(40);
+                Input.KeyUp(Keys.Enter);
+                Thread.Sleep(100);
+
+                Input.KeyDown(Keys.LControlKey);
+                Input.KeyDown(Keys.A);
+                Thread.Sleep(25);
+                Input.KeyUp(Keys.A);
+                Input.KeyUp(Keys.LControlKey);
+                Thread.Sleep(25);
+                Input.KeyDown(Keys.Back);
+                Thread.Sleep(25);
+                Input.KeyUp(Keys.Back);
+                Thread.Sleep(40);
+
+                var keys = new[] { Keys.OemQuestion, Keys.H, Keys.I, Keys.D, Keys.E, Keys.O, Keys.U, Keys.T };
+                foreach (var k in keys)
+                {
+                    Input.KeyDown(k);
+                    Thread.Sleep(20);
+                    Input.KeyUp(k);
+                    Thread.Sleep(20);
+                }
+
+                Thread.Sleep(50);
+                Input.KeyDown(Keys.Enter);
+                Thread.Sleep(40);
+                Input.KeyUp(Keys.Enter);
+                Thread.Sleep(100);
+            }
+            catch { }
         }
 
         public void Render(BotContext ctx)
