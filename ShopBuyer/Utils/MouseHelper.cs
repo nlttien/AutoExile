@@ -41,6 +41,24 @@ namespace AutoExile.ShopBuyer.Utils
             Thread.Sleep(30);
         }
 
+        public static void CtrlShiftLeftClickAt(Vector2 target, int hoverWaitMs = 50, int holdMs = 40)
+        {
+            Input.SetCursorPos(target);
+            Thread.Sleep(hoverWaitMs);
+            Input.KeyDown(Keys.LControlKey);
+            Thread.Sleep(15);
+            Input.KeyDown(Keys.LShiftKey);
+            Thread.Sleep(15);
+            Input.LeftDown();
+            Thread.Sleep(holdMs);
+            Input.LeftUp();
+            Thread.Sleep(15);
+            Input.KeyUp(Keys.LShiftKey);
+            Thread.Sleep(15);
+            Input.KeyUp(Keys.LControlKey);
+            Thread.Sleep(20);
+        }
+
         public static void CtrlLeftClick()
         {
             Input.KeyDown(Keys.LControlKey);
@@ -49,6 +67,21 @@ namespace AutoExile.ShopBuyer.Utils
             Thread.Sleep(50);
             Input.LeftUp();
             Thread.Sleep(35);
+            Input.KeyUp(Keys.LControlKey);
+        }
+
+        public static void CtrlShiftLeftClick()
+        {
+            Input.KeyDown(Keys.LControlKey);
+            Thread.Sleep(20);
+            Input.KeyDown(Keys.LShiftKey);
+            Thread.Sleep(20);
+            Input.LeftDown();
+            Thread.Sleep(40);
+            Input.LeftUp();
+            Thread.Sleep(20);
+            Input.KeyUp(Keys.LShiftKey);
+            Thread.Sleep(20);
             Input.KeyUp(Keys.LControlKey);
         }
 
