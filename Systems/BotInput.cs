@@ -488,6 +488,12 @@ namespace AutoExile.Systems
         {
             _lastInputEvent = DateTime.Now;
             LogRawInput(eventType, detail);
+            LastActionDetail = $"{eventType} {detail}".Trim();
+            if (eventType != "MoveMouse" && eventType != "UpdateMovementCursor")
+            {
+                var mp = Input.MousePosition;
+                LogAction(eventType + (string.IsNullOrEmpty(detail) ? "" : $" [{detail}]"), new Vector2(mp.X, mp.Y), null, true);
+            }
         }
 
         // ── Raw Input Wrappers ──
