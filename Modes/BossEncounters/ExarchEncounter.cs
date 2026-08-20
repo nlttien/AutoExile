@@ -285,6 +285,7 @@ namespace AutoExile.Modes.BossEncounters
             }
 
             // Stand still if within close range, otherwise step closer
+            var distToTarget = Vector2.Distance(playerGrid, targetGrid);
             if (distToTarget > CombatCloseRange)
             {
                 if (!ctx.Navigation.IsNavigating)
