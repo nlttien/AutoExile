@@ -232,9 +232,7 @@ namespace AutoExile.Modes.BossEncounters
                 ? new Vector2(_bossEntity.GridPosNum.X, _bossEntity.GridPosNum.Y)
                 : ArenaCenterPos;
 
-            var distToTarget = Vector2.Distance(playerGrid, targetGrid);
-
-            // Check if boss is dead
+            // 1. Kiểm tra nếu boss đã chết
             if (IsBossDead(gc))
             {
                 BotInput.ReleaseRightClick();
@@ -242,38 +240,56 @@ namespace AutoExile.Modes.BossEncounters
                 _phaseStartTime = DateTime.Now;
                 _bossDeathPos ??= (_bossEntity != null ? new Vector2(_bossEntity.GridPosNum.X, _bossEntity.GridPosNum.Y) : ArenaCenterPos);
                 Status = "Searing Exarch defeated — sweeping loot";
-                ctx.Log("[Exarch] Boss confirmed dead (via HP/IsDead/Envoy/MonsterCount), switching to loot phase");
+                ctx.Log("[Exarch] Boss confirmed dead, switching to loot phase");
                 return BossEncounterResult.InProgress;
             }
 
-            // Determine target screen position (Boss position or Arena Center)
-            var cam = gc.IngameState.Camera;
-            Vector2 targetScreenPos;
+            // 2. Nếu đã từng thấy boss sống mà giờ không thấy đâu nữa sau 1.5s -> Boss đã chết!
+            if (_bossWasAlive && (_bossEntity == null || !_bossEntity.IsAlive || _bossEntity.IsDead))
+            {
+                if ((DateTime.Now - _bossLastSeenAliveTime).TotalSeconds > 1.5)
+                {
+                    BotInput.ReleaseRightClick();
+                    _phase = ExarchPhase.WaitingForLoot;
+                    _phaseStartTime = DateTime.Now;
+                    _bossDeathPos ??= ArenaCenterPos;
+                    Status = "Searing Exarch defeated — sweeping loot";
+                    ctx.Log("[Exarch] Boss despawned after active combat, switching to loot phase");
+                    return BossEncounterResult.InProgress;
+                }
+            }
 
-            if (_bossEntity != null)
+            // 3. Chỉ xả skill khi THỰC SỰ có Boss sống trước mặt hoặc đang pre-cast lúc mở đầu
+            var cam = gc.IngameState.Camera;
+            if (_bossEntity != null && _bossEntity.IsValid && _bossEntity.IsAlive && !_bossEntity.IsDead)
             {
                 var bossWorld = _bossEntity.BoundsCenterPosNum;
                 var bossScreen = cam.WorldToScreen(bossWorld);
                 var windowRect = gc.Window.GetWindowRectangle();
-                targetScreenPos = new Vector2(windowRect.X + bossScreen.X, windowRect.Y + bossScreen.Y);
+                var targetScreenPos = new Vector2(windowRect.X + bossScreen.X, windowRect.Y + bossScreen.Y);
+                CastMainSkill(ctx, targetScreenPos);
             }
-            else
+            else if (!_bossWasAlive && (DateTime.Now - _phaseStartTime).TotalSeconds < 5.0)
             {
+                // Pre-cast lúc mới bước vào sàn đấu
                 var centerWorld = Pathfinding.GridToWorld3D(gc, targetGrid);
                 var centerScreen = cam.WorldToScreen(centerWorld);
                 var windowRect = gc.Window.GetWindowRectangle(); 
-                targetScreenPos = new Vector2(windowRect.X + centerScreen.X, windowRect.Y + centerScreen.Y);
+                var targetScreenPos = new Vector2(windowRect.X + centerScreen.X, windowRect.Y + centerScreen.Y);
+                CastMainSkill(ctx, targetScreenPos);
             }
-
-            // Continuously cast attack/spell/trap skills on Boss non-stop until boss is dead
-            CastMainSkill(ctx, targetScreenPos);
+            else
+            {
+                // Boss không còn sống -> Lập tức nhả chuột, ngừng ném skill!
+                BotInput.ReleaseRightClick();
+            }
 
             // Stand still if within close range, otherwise step closer
             if (distToTarget > CombatCloseRange)
             {
                 if (!ctx.Navigation.IsNavigating)
                     ctx.Navigation.NavigateTo(gc, targetGrid);
-                Status = $"Casting & closing in ({distToTarget:F0}g > {CombatCloseRange:F0}g)";
+                Status = $"Approaching combat position ({distToTarget:F0}g > {CombatCloseRange:F0}g)";
             }
             else
             {
@@ -282,7 +298,7 @@ namespace AutoExile.Modes.BossEncounters
                 var hpText = life != null && life.MaxHP > 0
                     ? $" [{(float)life.CurHP / life.MaxHP * 100f:F0}% HP]"
                     : "";
-                Status = $"Standing close ({distToTarget:F0}g) & casting at Searing Exarch{hpText}";
+                Status = $"Engaging Searing Exarch{hpText}";
             }
 
             return BossEncounterResult.InProgress;
