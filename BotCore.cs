@@ -2499,8 +2499,9 @@ namespace AutoExile
             var winRect = GameController.Window.GetWindowRectangle();
             var defaultH = Math.Max(450f, winRect.Height - 200f);
 
-            ImGui.SetNextWindowPos(new Vector2(15, 170), ImGuiCond.FirstUseEver);
-            ImGui.SetNextWindowSize(new Vector2(520, defaultH), ImGuiCond.FirstUseEver);
+            ImGui.SetNextWindowPos(new Vector2(15, 130), ImGuiCond.FirstUseEver);
+            ImGui.SetNextWindowSize(new Vector2(500, defaultH), ImGuiCond.FirstUseEver);
+            ImGui.SetNextWindowCollapsed(false, ImGuiCond.Always);
 
             // Stylish semi-transparent dark theme
             ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.04f, 0.06f, 0.10f, 0.92f));
@@ -2511,7 +2512,7 @@ namespace AutoExile
             ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 4f);
 
             var isOpen = true;
-            if (ImGui.Begin("⚡ Bot Input & Action Monitor (Scrollable Log)", ref isOpen, ImGuiWindowFlags.None))
+            if (ImGui.Begin("Bot Input & Action Log Monitor###BotActionLogWindow_v2", ref isOpen, ImGuiWindowFlags.NoCollapse))
             {
                 // 1. Bot State, Mode & Runtime
                 var running = Settings.Running.Value;

@@ -36,7 +36,15 @@ namespace AutoExile.Systems
                     return false;
 
                 var tiles = new ConcurrentDictionary<string, List<Vector2>>();
-                TileStructure[] tileData = memory.ReadStdVector<TileStructure>(terrain.TgtArray);
+                TileStructure[]? tileData = null;
+                try
+                {
+                    tileData = memory.ReadStdVector<TileStructure>(terrain.TgtArray);
+                }
+                catch
+                {
+                    return false;
+                }
 
                 if (tileData == null || tileData.Length == 0)
                     return false;
