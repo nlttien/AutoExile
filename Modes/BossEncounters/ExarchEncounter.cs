@@ -135,6 +135,19 @@ namespace AutoExile.Modes.BossEncounters
                     _bossLastSeenAliveTime = DateTime.Now;
                     _bossDeathPos = new Vector2(_bossEntity.GridPosNum.X, _bossEntity.GridPosNum.Y);
                 }
+
+                // KIỂM TRA BOSS CHẾT TRÊN TOÀN BỘ CÁC PHASE (Bất kể đang ở NavigateToCenter, Fighting hay BallPhase)
+                if (IsBossDead(gc))
+                {
+                    BotInput.ReleaseRightClick();
+                    BotInput.ReleaseAllKeys();
+                    _phase = ExarchPhase.WaitingForLoot;
+                    _phaseStartTime = DateTime.Now;
+                    _bossDeathPos ??= (_bossEntity != null ? new Vector2(_bossEntity.GridPosNum.X, _bossEntity.GridPosNum.Y) : ArenaCenterPos);
+                    Status = "Searing Exarch defeated — sweeping loot";
+                    ctx.Log("[Exarch] Boss confirmed dead (detected across all phases), switching to loot phase");
+                    return TickWaitingForLoot(ctx, gc, playerGrid);
+                }
             }
 
             switch (_phase)
@@ -151,13 +164,12 @@ namespace AutoExile.Modes.BossEncounters
             }
         }
 
-        private const float CombatCloseRange = 12f;
-
         private BossEncounterResult TickNavigateToCenter(BotContext ctx, GameController gc, Vector2 playerGrid)
         {
             if ((DateTime.Now - _phaseStartTime).TotalSeconds > 60)
             {
                 BotInput.ReleaseRightClick();
+                BotInput.ReleaseAllKeys();
                 Status = "Timeout navigating to center";
                 return BossEncounterResult.Failed;
             }
@@ -167,6 +179,19 @@ namespace AutoExile.Modes.BossEncounters
                 : ArenaCenterPos;
 
             var distToTarget = Vector2.Distance(playerGrid, targetGrid);
+            var desiredCombatRange = Math.Max(15f, ctx.Settings.Build.CombatRange.Value);
+
+            // Chuyển sang pha Fighting ngay khi thấy Boss hoặc đã vào tầm đánh (<= 35 units)
+            if (_bossEntity != null || distToTarget <= desiredCombatRange)
+            {
+                ctx.Navigation.Stop(gc);
+                _phase = ExarchPhase.Fighting;
+                _phaseStartTime = DateTime.Now;
+                _combatStartTime = DateTime.Now;
+                _hasEngagedBoss = true;
+                ctx.Log($"[Exarch] Engaging Searing Exarch (dist: {distToTarget:F0}g)");
+                return TickFighting(ctx, gc, playerGrid);
+            }
 
             // Calculate target screen position for pre-casting
             var cam = gc.IngameState.Camera;
@@ -183,18 +208,6 @@ namespace AutoExile.Modes.BossEncounters
                 CastMainSkill(ctx, targetScreenPos);
             }
 
-            // Move to close range (<= 12 units) before stopping to fight
-            if (distToTarget <= CombatCloseRange)
-            {
-                ctx.Navigation.Stop(gc);
-                _phase = ExarchPhase.Fighting;
-                _phaseStartTime = DateTime.Now;
-                _combatStartTime = DateTime.Now;
-                _hasEngagedBoss = true;
-                ctx.Log($"[Exarch] Reached close combat position ({distToTarget:F0}g <= {CombatCloseRange:F0}g) — engaging Searing Exarch");
-                return BossEncounterResult.InProgress;
-            }
-
             // Navigate directly to boss/arena center
             if (!ctx.Navigation.IsNavigating)
             {
@@ -204,6 +217,7 @@ namespace AutoExile.Modes.BossEncounters
                     if (_exploreFails > 10)
                     {
                         BotInput.ReleaseRightClick();
+                        BotInput.ReleaseAllKeys();
                         return BossEncounterResult.Failed;
                     }
                 }
@@ -211,7 +225,7 @@ namespace AutoExile.Modes.BossEncounters
 
             Status = distToTarget <= 45
                 ? $"Pre-casting skills & advancing ({distToTarget:F0}g away)"
-                : $"Moving close to Searing Exarch ({distToTarget:F0}g away, target: <= {CombatCloseRange:F0}g)";
+                : $"Moving close to Searing Exarch ({distToTarget:F0}g away)";
             return BossEncounterResult.InProgress;
         }
 
@@ -279,13 +293,14 @@ namespace AutoExile.Modes.BossEncounters
                 BotInput.ReleaseRightClick();
             }
 
-            // Stand still if within close range, otherwise step closer
+            // Stand still if within combat range, otherwise step closer
             var distToTarget = Vector2.Distance(playerGrid, targetGrid);
-            if (distToTarget > CombatCloseRange)
+            var desiredCombatRange = Math.Max(15f, ctx.Settings.Build.CombatRange.Value);
+            if (distToTarget > desiredCombatRange)
             {
                 if (!ctx.Navigation.IsNavigating)
                     ctx.Navigation.NavigateTo(gc, targetGrid);
-                Status = $"Approaching combat position ({distToTarget:F0}g > {CombatCloseRange:F0}g)";
+                Status = $"Approaching combat position ({distToTarget:F0}g > {desiredCombatRange:F0}g)";
             }
             else
             {
