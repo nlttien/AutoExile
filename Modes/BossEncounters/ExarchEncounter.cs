@@ -424,71 +424,52 @@ namespace AutoExile.Modes.BossEncounters
 
         private bool IsBossDead(GameController gc)
         {
-            // 1. Kiểm tra trực tiếp _bossEntity nếu còn giữ tham chiếu
-            if (_bossEntity != null)
-            {
-                var life = _bossEntity.GetComponent<Life>();
-                if (_bossEntity.IsDead || !_bossEntity.IsAlive || (life != null && life.CurHP <= 0))
-                {
-                    return true;
-                }
-            }
-
-            // 2. Quét OnlyValidEntities để phát hiện NPC The Envoy hoặc xác Searing Exarch
+            // Dấu hiệu 1: The Envoy xuất hiện trong Arena -> 100% Searing Exarch đã chết!
             try
             {
-                bool foundAliveBoss = false;
                 foreach (var entity in gc.EntityListWrapper.OnlyValidEntities)
                 {
                     if (entity == null || !entity.IsValid) continue;
                     var path = entity.Path ?? string.Empty;
                     var renderName = entity.RenderName ?? string.Empty;
 
-                    // The Envoy chỉ xuất hiện khi Searing Exarch đã chết
                     if (path.Contains("TheEnvoy", StringComparison.OrdinalIgnoreCase) ||
                         renderName.Contains("The Envoy", StringComparison.OrdinalIgnoreCase) ||
                         renderName.Contains("Envoy", StringComparison.OrdinalIgnoreCase))
                     {
                         return true;
                     }
+                }
+            }
+            catch { }
+
+            // Dấu hiệu 2: Kiểm tra trực tiếp entity Boss
+            if (_bossEntity != null && _bossEntity.IsValid)
+            {
+                var life = _bossEntity.GetComponent<Life>();
+                if (_bossEntity.IsDead || !_bossEntity.IsAlive || (life != null && life.CurHP <= 0 && _bossWasAlive))
+                {
+                    return true;
+                }
+            }
+
+            // Dấu hiệu 3: Tìm entity Searing Exarch trong OnlyValidEntities
+            try
+            {
+                foreach (var entity in gc.EntityListWrapper.OnlyValidEntities)
+                {
+                    if (entity == null || !entity.IsValid) continue;
+                    var path = entity.Path ?? string.Empty;
+                    var renderName = entity.RenderName ?? string.Empty;
 
                     if (path.Contains(BossPath, StringComparison.OrdinalIgnoreCase) ||
                         renderName.Contains("Searing Exarch", StringComparison.OrdinalIgnoreCase))
                     {
                         var life = entity.GetComponent<Life>();
-                        if (entity.IsDead || !entity.IsAlive || (life != null && life.CurHP <= 0))
+                        if (entity.IsDead || !entity.IsAlive || (life != null && life.CurHP <= 0 && _bossWasAlive))
                         {
                             return true;
                         }
-                        if (entity.IsAlive && life != null && life.CurHP > 0)
-                        {
-                            foundAliveBoss = true;
-                        }
-                    }
-                }
-
-                // Nếu đã giao chiến mà hiện không còn boss sống trong arena -> Đã chết!
-                if ((_hasEngagedBoss || _bossWasAlive) && !foundAliveBoss)
-                {
-                    var monsters = gc.EntityListWrapper.ValidEntitiesByType[EntityType.Monster];
-                    if (monsters == null || monsters.Count == 0)
-                    {
-                        return true;
-                    }
-
-                    bool hasAnyUniqueMonster = false;
-                    foreach (var m in monsters)
-                    {
-                        if (m != null && m.IsValid && m.IsAlive && m.Rarity == MonsterRarity.Unique)
-                        {
-                            hasAnyUniqueMonster = true;
-                            break;
-                        }
-                    }
-
-                    if (!hasAnyUniqueMonster)
-                    {
-                        return true;
                     }
                 }
             }
@@ -501,23 +482,28 @@ namespace AutoExile.Modes.BossEncounters
         {
             try
             {
-                // Ưu tiên tìm trong Monster
-                foreach (var entity in gc.EntityListWrapper.ValidEntitiesByType[EntityType.Monster])
+                // 1. Quét trong ValidEntitiesByType[Monster]
+                var monsters = gc.EntityListWrapper.ValidEntitiesByType[EntityType.Monster];
+                if (monsters != null)
                 {
-                    if (entity.Rarity != MonsterRarity.Unique) continue;
-
-                    if (entity.Path != null && entity.Path.Contains(BossPath, StringComparison.OrdinalIgnoreCase))
-                        return entity;
+                    foreach (var entity in monsters)
+                    {
+                        if (entity == null || !entity.IsValid) continue;
+                        if (entity.Path != null && entity.Path.Contains(BossPath, StringComparison.OrdinalIgnoreCase))
+                            return entity;
+                        if (entity.RenderName != null && entity.RenderName.Contains("Searing Exarch", StringComparison.OrdinalIgnoreCase))
+                            return entity;
+                    }
                 }
 
-                // Fallback: Tìm trong OnlyValidEntities
+                // 2. Quét trong OnlyValidEntities
                 foreach (var entity in gc.EntityListWrapper.OnlyValidEntities)
                 {
-                    if (entity != null && entity.IsValid && entity.Path != null &&
-                        entity.Path.Contains(BossPath, StringComparison.OrdinalIgnoreCase))
-                    {
+                    if (entity == null || !entity.IsValid) continue;
+                    if (entity.Path != null && entity.Path.Contains(BossPath, StringComparison.OrdinalIgnoreCase))
                         return entity;
-                    }
+                    if (entity.RenderName != null && entity.RenderName.Contains("Searing Exarch", StringComparison.OrdinalIgnoreCase))
+                        return entity;
                 }
             }
             catch { }
