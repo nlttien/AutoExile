@@ -697,26 +697,29 @@ namespace AutoExile
             _stash.ActionCooldownMs = Settings.Loot.StashItemCooldownMs.Value;
             _stash.ApplyIncubators = Settings.AutoApplyIncubators.Value;
 
-            // Record tick state BEFORE early returns so recordings capture paused/loading/settle state
-            _recorder.RecordTick(GameController, _mode.Name,
-                (_mode as Modes.WaveFarm.WaveFarmMode)?.Status
-                ?? (_mode as BlightMode)?.Phase.ToString()
-                ?? (_mode as SimulacrumMode)?.Phase.ToString()
-                ?? (_mode as HeistMode)?.Phase.ToString()
-                ?? (_mode as LabyrinthMode)?.Phase.ToString()
-                ?? (_mode as FollowerMode)?.State.ToString()
-                ?? (_mode as BossMode)?.Phase.ToString()
-                ?? "",
-                (_mode as Modes.WaveFarm.WaveFarmMode)?.Decision
-                ?? (_mode as SimulacrumMode)?.Decision
-                ?? (_mode as HeistMode)?.Decision
-                ?? (_mode as FollowerMode)?.Decision
-                ?? (_mode as BossMode)?.Decision
-                ?? "",
-                (_mode as Modes.WaveFarm.WaveFarmMode)?.Status
-                ?? (_mode as BossMode)?.Status
-                ?? "",
-                _navigation, _interaction, _loot, _threat);
+            // Record tick state ONLY when human recording is actively enabled (saves RAM & disk writes)
+            if (_humanRecorder.IsRecording)
+            {
+                _recorder.RecordTick(GameController, _mode.Name,
+                    (_mode as Modes.WaveFarm.WaveFarmMode)?.Status
+                    ?? (_mode as BlightMode)?.Phase.ToString()
+                    ?? (_mode as SimulacrumMode)?.Phase.ToString()
+                    ?? (_mode as HeistMode)?.Phase.ToString()
+                    ?? (_mode as LabyrinthMode)?.Phase.ToString()
+                    ?? (_mode as FollowerMode)?.State.ToString()
+                    ?? (_mode as BossMode)?.Phase.ToString()
+                    ?? "",
+                    (_mode as Modes.WaveFarm.WaveFarmMode)?.Decision
+                    ?? (_mode as SimulacrumMode)?.Decision
+                    ?? (_mode as HeistMode)?.Decision
+                    ?? (_mode as FollowerMode)?.Decision
+                    ?? (_mode as BossMode)?.Decision
+                    ?? "",
+                    (_mode as Modes.WaveFarm.WaveFarmMode)?.Status
+                    ?? (_mode as BossMode)?.Status
+                    ?? "",
+                    _navigation, _interaction, _loot, _threat);
+            }
 
             // Only run full mode logic when running
             if (!Settings.Running)

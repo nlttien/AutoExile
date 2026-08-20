@@ -1441,8 +1441,8 @@ namespace AutoExile.Systems
                 return;
             }
 
-            // Utility flasks (use in combat when nearby enemies are targetable and damageable)
-            if (InCombat && BestTarget?.IsTargetable == true && !BossInvulnerable)
+            // Utility flasks — only use if interval is explicitly configured > 0
+            if (InCombat && BestTarget?.IsTargetable == true && !BossInvulnerable && settings.UtilityFlaskIntervalMs.Value > 0)
             {
                 for (int i = 0; i < 5; i++)
                 {

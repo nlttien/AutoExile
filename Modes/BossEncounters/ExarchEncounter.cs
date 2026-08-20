@@ -319,7 +319,8 @@ namespace AutoExile.Modes.BossEncounters
 
         private static void CastMainSkill(BotContext ctx, Vector2 targetScreenPos)
         {
-            if ((DateTime.Now - _lastCastTime).TotalMilliseconds < 100)
+            // Human-like cadence: 160ms between casts to avoid key spamming
+            if ((DateTime.Now - _lastCastTime).TotalMilliseconds < 160)
                 return;
             _lastCastTime = DateTime.Now;
 
@@ -329,6 +330,7 @@ namespace AutoExile.Modes.BossEncounters
                 Input.SetCursorPos(targetScreenPos);
             }
 
+            // Strictly cast primary attacks: RMB, LMB, or Key 1 (D1)
             var enemySkills = ctx.Settings.Build.AllSkillSlots
                 .Where(s => s.Key.Value != System.Windows.Forms.Keys.None && s.Role.Value == SkillRole.Enemy.ToString())
                 .OrderByDescending(s => s.Priority.Value)
@@ -343,7 +345,11 @@ namespace AutoExile.Modes.BossEncounters
                     {
                         BotInput.RapidRightClickAt(targetScreenPos);
                     }
-                    else
+                    else if (key == System.Windows.Forms.Keys.LButton)
+                    {
+                        BotInput.Click(targetScreenPos);
+                    }
+                    else if (key == System.Windows.Forms.Keys.D1)
                     {
                         BotInput.PressKey(key);
                     }
@@ -351,7 +357,7 @@ namespace AutoExile.Modes.BossEncounters
             }
             else
             {
-                // Default fallback: Right Click
+                // Default fallback: Right Click only
                 BotInput.RapidRightClickAt(targetScreenPos);
             }
         }
