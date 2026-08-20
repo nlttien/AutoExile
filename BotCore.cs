@@ -836,6 +836,9 @@ namespace AutoExile
                 Graphics.DrawText(recText, new Vector2(100, 116), SharpDX.Color.Red);
             }
 
+            // Input & Action Monitor HUD Overlay
+            RenderInputAndActionHUD();
+
             // Loot tracker overlay (top-right area)
             var winWidth = GameController.Window.GetWindowRectangle().Width;
             _lootTracker.Render(Graphics, new Vector2(winWidth - 250, 80));
@@ -2519,6 +2522,104 @@ namespace AutoExile
                         var label = $"[{sig.Tier}] {shortKey} ({sig.TotalCount})";
                         Graphics.DrawText(label, new Vector2(screenPos.X - 60, screenPos.Y - 20), color);
                     }
+                }
+            }
+        }
+
+        private void RenderInputAndActionHUD()
+        {
+            var startX = 80f;
+            var startY = 135f;
+            var panelWidth = 460f;
+            var lineH = 17f;
+
+            // 1. Thu thập thông tin hành động
+            var modeName = _mode?.Name ?? "None";
+            var modeStatus = _mode?.Status ?? "Idle";
+            var navStatus = _navigation.IsNavigating
+                ? $"Đi tới ({_navigation.Destination?.X:F0}, {_navigation.Destination?.Y:F0}) [Wp: {_navigation.CurrentWaypointIndex + 1}/{_navigation.CurrentNavPath.Count}]"
+                : "Đứng yên";
+            var combatStatus = _combat.InCombat
+                ? $"Giao tranh ({_combat.LastAction}) Mục tiêu: {_combat.BestTarget?.RenderName ?? "None"}"
+                : "Không có mục tiêu";
+            var interStatus = _interaction.IsBusy
+                ? $"{_interaction.Status}"
+                : "Không có";
+
+            // 2. Thu thập phím & chuột đang nhấn
+            var activeKeysList = new List<string>();
+            if (BotInput.IsRightClickHeld)
+                activeKeysList.Add("CHUỘT PHẢI [GIỮ]");
+            else if ((DateTime.Now - BotInput.LastRightClickTime).TotalMilliseconds < 250)
+                activeKeysList.Add("CHUỘT PHẢI [CLICK/XẢ]");
+
+            if (BotInput.MovementKey != Keys.None)
+                activeKeysList.Add($"DI CHUYỂN [{BotInput.MovementKey}]");
+            else if ((DateTime.Now - BotInput.LastLeftClickTime).TotalMilliseconds < 250)
+                activeKeysList.Add("CHUỘT TRÁI [CLICK]");
+
+            foreach (var k in BotInput.HeldKeys)
+            {
+                if (k != Keys.None)
+                    activeKeysList.Add($"PHÍM [{k}]");
+            }
+
+            var activeKeysText = activeKeysList.Count > 0 ? string.Join(" + ", activeKeysList) : "Không (Idle)";
+
+            // 3. Lịch sử 5 hành động gần nhất
+            var recentActions = BotInput.GetRecentActions(5);
+
+            // Tính toán chiều cao bảng HUD
+            var totalLines = 6 + (recentActions.Count > 0 ? recentActions.Count + 1 : 0);
+            var panelHeight = totalLines * lineH + 14f;
+
+            // Vẽ nền HUD bán trong suốt
+            Graphics.DrawBox(new SharpDX.RectangleF(startX, startY, panelWidth, panelHeight), new SharpDX.Color(12, 16, 24, 230));
+            // Viền trên màu Cyan
+            Graphics.DrawBox(new SharpDX.RectangleF(startX, startY, panelWidth, 2), new SharpDX.Color(0, 200, 255, 255));
+            // Khung viền xung quanh
+            Graphics.DrawBox(new SharpDX.RectangleF(startX, startY, 1, panelHeight), new SharpDX.Color(40, 70, 110, 220));
+            Graphics.DrawBox(new SharpDX.RectangleF(startX + panelWidth - 1, startY, 1, panelHeight), new SharpDX.Color(40, 70, 110, 220));
+            Graphics.DrawBox(new SharpDX.RectangleF(startX, startY + panelHeight - 1, panelWidth, 1), new SharpDX.Color(40, 70, 110, 220));
+
+            var curY = startY + 6f;
+            var curX = startX + 10f;
+
+            // Tiêu đề
+            Graphics.DrawText("⚡ THEO DÕI NÚT ĐANG ẤN & HÀNH ĐỘNG BOT", new Vector2(curX, curY), SharpDX.Color.Cyan);
+            curY += lineH + 2f;
+
+            // Nút & chuột đang ấn
+            var keyColor = activeKeysList.Count > 0 ? SharpDX.Color.LimeGreen : SharpDX.Color.LightGray;
+            Graphics.DrawText($"▶ NÚT ĐANG ẤN: {activeKeysText}", new Vector2(curX, curY), keyColor);
+            curY += lineH;
+
+            // Hành động hiện tại của mode
+            Graphics.DrawText($"▶ HÀNH ĐỘNG CHÍNH: [{modeName}] {modeStatus}", new Vector2(curX, curY), SharpDX.Color.Yellow);
+            curY += lineH;
+
+            // Các hệ thống con
+            Graphics.DrawText($"  ├ Di chuyển: {navStatus}", new Vector2(curX, curY), SharpDX.Color.White);
+            curY += lineH;
+            Graphics.DrawText($"  ├ Tấn công: {combatStatus}", new Vector2(curX, curY), SharpDX.Color.White);
+            curY += lineH;
+            Graphics.DrawText($"  ├ Tương tác: {interStatus}", new Vector2(curX, curY), _interaction.IsBusy ? SharpDX.Color.Orange : SharpDX.Color.LightGray);
+            curY += lineH;
+
+            // Lịch sử 5 hành động gần nhất
+            if (recentActions.Count > 0)
+            {
+                Graphics.DrawText("▶ LỊCH SỬ HÀNH ĐỘNG GẦN ĐÂY:", new Vector2(curX, curY), SharpDX.Color.LightSteelBlue);
+                curY += lineH;
+
+                foreach (var action in recentActions)
+                {
+                    var timeStr = action.Timestamp.ToString("HH:mm:ss.fff");
+                    var posStr = action.Position.HasValue ? $" @ ({action.Position.Value.X:F0},{action.Position.Value.Y:F0})" : "";
+                    var keyStr = action.Key.HasValue ? $" [{action.Key.Value}]" : "";
+                    var actText = $"  • {timeStr} | {action.Type}{keyStr}{posStr}";
+                    Graphics.DrawText(actText, new Vector2(curX, curY), SharpDX.Color.LightGray);
+                    curY += lineH;
                 }
             }
         }

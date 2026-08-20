@@ -581,6 +581,12 @@ namespace AutoExile.Systems
         private static bool _isRightClickHeld;
         public static bool IsRightClickHeld => _isRightClickHeld;
 
+        public static IReadOnlyCollection<Keys> HeldKeys => _heldKeys.Keys;
+        public static Keys MovementKey => IsMovementActive && !IsMovementSuspended ? _movementKey : Keys.None;
+        public static DateTime LastRightClickTime { get; set; } = DateTime.MinValue;
+        public static DateTime LastLeftClickTime { get; set; } = DateTime.MinValue;
+        public static string LastActionDetail { get; set; } = "Idle";
+
         /// <summary>
         /// Fast click Right Click at target screen position with proper hold duration.
         /// Ideal for mine/trap throwing, spells, attacks on bosses.
@@ -590,6 +596,9 @@ namespace AutoExile.Systems
             if (!ClampToWindow(ref absPos)) return false;
             Input.SetCursorPos(absPos);
             Input.RightDown();
+            LastRightClickTime = DateTime.Now;
+            LastActionDetail = $"RapidRightClick @ ({absPos.X:F0}, {absPos.Y:F0})";
+            LogAction("RapidRightClick", absPos, null, true);
             Task.Delay(35).ContinueWith(_ => Input.RightUp());
             return true;
         }
@@ -602,11 +611,14 @@ namespace AutoExile.Systems
         {
             if (!ClampToWindow(ref absPos)) return false;
             Input.SetCursorPos(absPos);
+            LastRightClickTime = DateTime.Now;
+            LastActionDetail = $"HoldRightClick @ ({absPos.X:F0}, {absPos.Y:F0})";
             if (!_isRightClickHeld)
             {
                 Input.RightDown();
                 _isRightClickHeld = true;
                 MarkInputEvent("RightDown", "hold-right");
+                LogAction("HoldRightClick", absPos, null, true);
             }
             return true;
         }
@@ -619,6 +631,8 @@ namespace AutoExile.Systems
             Input.RightUp();
             _isRightClickHeld = false;
             MarkInputEvent("RightUp", "release-right");
+            LastActionDetail = "ReleaseRightClick";
+            LogAction("ReleaseRightClick", null, null, true);
         }
 
         /// <summary>
