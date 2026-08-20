@@ -116,6 +116,9 @@ namespace AutoExile
         private DateTime _lastConfigSave = DateTime.Now;
         private const double ConfigSaveIntervalSec = 30.0;
 
+        // Input & Action Log Monitor UI
+        private bool _autoScrollInputLog = true;
+
         // --- Buff scanner ---
         private bool _buffScanActive;
         private int _buffScanSlotIndex = -1; // which skill slot (0-based) we're scanning for
@@ -2528,115 +2531,117 @@ namespace AutoExile
 
         private void RenderInputAndActionHUD()
         {
-            var startX = 15f;
-            var startY = 225f;
-            var panelWidth = 520f;
-            var lineH = 17f;
+            var winRect = GameController.Window.GetWindowRectangle();
+            var defaultH = Math.Max(450f, winRect.Height - 200f);
 
-            // 1. Current Mode & Phase Status
-            var modeName = _mode?.Name ?? "None";
-            var modeStatus = _mode?.Status ?? "Idle";
-            var navStatus = _navigation.IsNavigating
-                ? $"Navigating to ({_navigation.Destination?.X:F0}, {_navigation.Destination?.Y:F0}) [Wp: {_navigation.CurrentWaypointIndex + 1}/{_navigation.CurrentNavPath.Count}]"
-                : "Standing Still";
-            var combatStatus = _combat.InCombat
-                ? $"Combat ({_combat.LastAction}) Target: {_combat.BestTarget?.RenderName ?? "None"}"
-                : "No Target (Out of combat)";
-            var interStatus = _interaction.IsBusy
-                ? $"{_interaction.Status}"
-                : "None";
+            ImGui.SetNextWindowPos(new Vector2(15, 170), ImGuiCond.FirstUseEver);
+            ImGui.SetNextWindowSize(new Vector2(520, defaultH), ImGuiCond.FirstUseEver);
 
-            // 2. Active Buttons / Keys Pressed Right Now
-            var activeKeysList = new List<string>();
-            if (BotInput.IsRightClickHeld)
-                activeKeysList.Add("RMB [HOLD / CAST]");
-            else if ((DateTime.Now - BotInput.LastRightClickTime).TotalMilliseconds < 250)
-                activeKeysList.Add("RMB [CLICK / CAST]");
+            // Stylish semi-transparent dark theme
+            ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.04f, 0.06f, 0.10f, 0.92f));
+            ImGui.PushStyleColor(ImGuiCol.TitleBg, new Vector4(0.08f, 0.14f, 0.24f, 0.95f));
+            ImGui.PushStyleColor(ImGuiCol.TitleBgActive, new Vector4(0.10f, 0.22f, 0.38f, 1.0f));
+            ImGui.PushStyleColor(ImGuiCol.Border, new Vector4(0.0f, 0.70f, 1.0f, 0.65f));
+            ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 6f);
+            ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 4f);
 
-            if (BotInput.MovementKey != Keys.None)
-                activeKeysList.Add($"MOVE [{BotInput.MovementKey}]");
-            else if ((DateTime.Now - BotInput.LastLeftClickTime).TotalMilliseconds < 250)
-                activeKeysList.Add("LMB [CLICK]");
-
-            foreach (var k in BotInput.HeldKeys)
+            var isOpen = true;
+            if (ImGui.Begin("⚡ Bot Input & Action Monitor (Scrollable Log)", ref isOpen, ImGuiWindowFlags.None))
             {
-                if (k != Keys.None)
-                    activeKeysList.Add($"KEY [{k}]");
-            }
+                // 1. Current Mode & Phase Status
+                var modeName = _mode?.Name ?? "None";
+                var modeStatus = _mode?.Status ?? "Idle";
+                var navStatus = _navigation.IsNavigating
+                    ? $"Moving -> ({_navigation.Destination?.X:F0}, {_navigation.Destination?.Y:F0}) [Wp: {_navigation.CurrentWaypointIndex + 1}/{_navigation.CurrentNavPath.Count}]"
+                    : "Standing Still";
+                var combatStatus = _combat.InCombat
+                    ? $"{_combat.LastAction} (Target: {_combat.BestTarget?.RenderName ?? "None"})"
+                    : "No Target (Idle)";
 
-            var activeKeysText = activeKeysList.Count > 0 ? string.Join(" + ", activeKeysList) : "None (Idle)";
+                // 2. Active Buttons / Keys Pressed Right Now
+                var activeKeysList = new List<string>();
+                if (BotInput.IsRightClickHeld)
+                    activeKeysList.Add("RMB [HOLD / CAST]");
+                else if ((DateTime.Now - BotInput.LastRightClickTime).TotalMilliseconds < 250)
+                    activeKeysList.Add("RMB [CLICK / CAST]");
 
-            // 3. Memory & Recording Status
-            var monsterCount = _entityCache.Monsters?.Count ?? 0;
-            var playerHp = GameController.Player?.GetComponent<ExileCore.PoEMemory.Components.Life>()?.HPPercentage ?? 100;
-            var areaName = GameController.Area?.CurrentArea?.Name ?? "Unknown";
-            var isRecordingMem = _humanRecorder.IsRecording || _mavenRecorder.IsRecording;
-            var memRecordText = isRecordingMem
-                ? $"RECORDER: ACTIVE ({_humanRecorder.TicksRecorded} ticks recorded)"
-                : "RECORDER: OFF (Memory Read-Only Sync)";
-            var memRecordColor = isRecordingMem ? SharpDX.Color.Red : SharpDX.Color.LimeGreen;
+                if (BotInput.MovementKey != Keys.None)
+                    activeKeysList.Add($"MOVE [{BotInput.MovementKey}]");
+                else if ((DateTime.Now - BotInput.LastLeftClickTime).TotalMilliseconds < 250)
+                    activeKeysList.Add("LMB [CLICK]");
 
-            // 4. Recent Actions History (Last 6 items)
-            var recentActions = BotInput.GetRecentActions(6);
-
-            // Compute HUD Box Height
-            var totalLines = 8 + (recentActions.Count > 0 ? recentActions.Count + 1 : 0);
-            var panelHeight = totalLines * lineH + 16f;
-
-            // Background & Border
-            Graphics.DrawBox(new SharpDX.RectangleF(startX, startY, panelWidth, panelHeight), new SharpDX.Color(10, 14, 22, 235));
-            Graphics.DrawBox(new SharpDX.RectangleF(startX, startY, panelWidth, 2), new SharpDX.Color(0, 180, 255, 255));
-            Graphics.DrawBox(new SharpDX.RectangleF(startX, startY, 1, panelHeight), new SharpDX.Color(40, 70, 110, 220));
-            Graphics.DrawBox(new SharpDX.RectangleF(startX + panelWidth - 1, startY, 1, panelHeight), new SharpDX.Color(40, 70, 110, 220));
-            Graphics.DrawBox(new SharpDX.RectangleF(startX, startY + panelHeight - 1, panelWidth, 1), new SharpDX.Color(40, 70, 110, 220));
-
-            var curY = startY + 6f;
-            var curX = startX + 10f;
-
-            // Title
-            Graphics.DrawText(">> BOT INPUT & MEMORY ACTION MONITOR <<", new Vector2(curX, curY), SharpDX.Color.Cyan);
-            curY += lineH + 2f;
-
-            // Active Input Keys & Buttons
-            var keyColor = activeKeysList.Count > 0 ? SharpDX.Color.LimeGreen : SharpDX.Color.LightGray;
-            Graphics.DrawText($"[ACTIVE INPUTS]  : {activeKeysText}", new Vector2(curX, curY), keyColor);
-            curY += lineH;
-
-            // Memory Status
-            Graphics.DrawText($"[MEMORY STATUS]  : {memRecordText}", new Vector2(curX, curY), memRecordColor);
-            curY += lineH;
-            Graphics.DrawText($"[MEMORY RAM SYNC]: Area: {areaName} | Monsters: {monsterCount} | HP: {playerHp}%", new Vector2(curX, curY), SharpDX.Color.LightSkyBlue);
-            curY += lineH;
-
-            // Current Mode / Phase Status
-            Graphics.DrawText($"[CURRENT ACTION] : [{modeName}] {modeStatus}", new Vector2(curX, curY), SharpDX.Color.Yellow);
-            curY += lineH;
-
-            // Sub-systems status
-            Graphics.DrawText($"  |- Move   : {navStatus}", new Vector2(curX, curY), SharpDX.Color.White);
-            curY += lineH;
-            Graphics.DrawText($"  |- Combat : {combatStatus}", new Vector2(curX, curY), SharpDX.Color.White);
-            curY += lineH;
-            Graphics.DrawText($"  |- Action : {BotInput.LastActionDetail}", new Vector2(curX, curY), _interaction.IsBusy ? SharpDX.Color.Orange : SharpDX.Color.LightSteelBlue);
-            curY += lineH;
-
-            // Recent Action History
-            if (recentActions.Count > 0)
-            {
-                Graphics.DrawText(">> RECENT ACTIONS LOG (Newest First):", new Vector2(curX, curY), SharpDX.Color.Gold);
-                curY += lineH;
-
-                foreach (var action in recentActions)
+                foreach (var k in BotInput.HeldKeys)
                 {
-                    var timeStr = action.Timestamp.ToString("HH:mm:ss.fff");
-                    var posStr = action.Position.HasValue ? $" @ ({action.Position.Value.X:F0},{action.Position.Value.Y:F0})" : "";
-                    var keyStr = action.Key.HasValue ? $" [{action.Key.Value}]" : "";
-                    var actColor = action.Type.Contains("Right") ? SharpDX.Color.LimeGreen : action.Type.Contains("Key") ? SharpDX.Color.Orange : SharpDX.Color.White;
-                    var actText = $"  * {timeStr} | {action.Type}{keyStr}{posStr}";
-                    Graphics.DrawText(actText, new Vector2(curX, curY), actColor);
-                    curY += lineH;
+                    if (k != Keys.None)
+                        activeKeysList.Add($"KEY [{k}]");
                 }
+
+                var activeKeysText = activeKeysList.Count > 0 ? string.Join(" + ", activeKeysList) : "None (Idle)";
+
+                // 3. Memory & Area Status
+                var monsterCount = _entityCache.Monsters?.Count ?? 0;
+                var playerHp = GameController.Player?.GetComponent<ExileCore.PoEMemory.Components.Life>()?.HPPercentage ?? 100;
+                var areaName = GameController.Area?.CurrentArea?.Name ?? "Unknown";
+
+                ImGui.TextColored(new Vector4(0.0f, 0.9f, 1.0f, 1.0f), "● ACTIVE INPUTS :");
+                ImGui.SameLine();
+                ImGui.TextColored(activeKeysList.Count > 0 ? new Vector4(0.2f, 1.0f, 0.2f, 1.0f) : new Vector4(0.7f, 0.7f, 0.7f, 1.0f), activeKeysText);
+
+                ImGui.TextColored(new Vector4(1.0f, 0.85f, 0.3f, 1.0f), $"● ACTION [{modeName}]: {modeStatus}");
+                ImGui.TextDisabled($"  Move: {navStatus} | Combat: {combatStatus}");
+                ImGui.TextDisabled($"  RAM: {areaName} | Monsters: {monsterCount} | Life: {playerHp}% | Last: {BotInput.LastActionDetail}");
+
+                ImGui.Separator();
+
+                // Controls: Auto-scroll checkbox & count
+                ImGui.Checkbox("Auto-Scroll (Follow Live)", ref _autoScrollInputLog);
+                ImGui.SameLine();
+                var actions = BotInput.GetRecentActions(300);
+                ImGui.TextDisabled($"({actions.Count} actions - scroll with mouse wheel)");
+
+                // Scrollable log area (Takes full remaining window height)
+                if (ImGui.BeginChild("LogScrollRegion", new Vector2(0, 0), true, ImGuiWindowFlags.AlwaysVerticalScrollbar))
+                {
+                    for (int i = actions.Count - 1; i >= 0; i--)
+                    {
+                        var action = actions[i];
+                        var timeStr = action.Timestamp.ToString("HH:mm:ss.fff");
+                        var posStr = action.Position.HasValue ? $" @ ({action.Position.Value.X:F0},{action.Position.Value.Y:F0})" : "";
+                        var keyStr = action.Key.HasValue ? $" [{action.Key.Value}]" : "";
+
+                        // Time in light cyan/gray
+                        ImGui.TextColored(new Vector4(0.6f, 0.75f, 0.9f, 0.85f), timeStr);
+                        ImGui.SameLine();
+                        ImGui.TextDisabled("|");
+                        ImGui.SameLine();
+
+                        // Colored action text
+                        Vector4 actColor;
+                        if (action.Type.Contains("Right"))
+                            actColor = new Vector4(0.3f, 1.0f, 0.3f, 1.0f); // Green for Right Click / Attacks
+                        else if (action.Type.Contains("Left") || action.Type.Contains("Move"))
+                            actColor = new Vector4(0.2f, 0.85f, 1.0f, 1.0f); // Cyan for Left Click / Move
+                        else if (action.Type.Contains("Key") || action.Type.Contains("Press"))
+                            actColor = new Vector4(1.0f, 0.75f, 0.2f, 1.0f); // Gold/Orange for Keys / Flasks
+                        else if (action.Type.Contains("Up"))
+                            actColor = new Vector4(0.55f, 0.55f, 0.55f, 0.85f); // Dim gray for Key releases
+                        else
+                            actColor = new Vector4(0.85f, 0.85f, 0.85f, 1.0f);
+
+                        ImGui.TextColored(actColor, $"{action.Type}{keyStr}{posStr}");
+                    }
+
+                    if (_autoScrollInputLog && ImGui.GetScrollY() >= ImGui.GetScrollMaxY() - 60)
+                    {
+                        ImGui.SetScrollHereY(1.0f);
+                    }
+                }
+                ImGui.EndChild();
             }
+            ImGui.End();
+
+            ImGui.PopStyleVar(2);
+            ImGui.PopStyleColor(4);
         }
     }
 
