@@ -9,6 +9,7 @@ namespace AutoExile.Modes
     public interface IBotMode
     {
         string Name { get; }
+        string Status => "";
 
         /// <summary>
         /// Called once when this mode becomes active.
