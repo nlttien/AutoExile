@@ -324,34 +324,17 @@ namespace AutoExile.Systems
         /// <summary>Decide what to do first once stash is open.</summary>
         private void EnterFirstStashPhase(GameController gc)
         {
-            // Multi-item path takes precedence — wave farming withdraws scarabs +
-            // portal scrolls + maybe maps in one stash trip.
-            if (!string.IsNullOrEmpty(WithdrawTabName) && WithdrawList.Count > 0)
+            _itemsStored = 0;
+
+            // BƯỚC 1: Cất đồ loot trước (nếu có đồ cần cất)
+            if (HasStashableItems(gc, ItemFilter))
             {
-                _pendingTabSwitch = WithdrawTabName;
-                _afterTabSwitch = StashPhase.WithdrawItems;
-                _phase = StashPhase.SwitchToWithdrawTab;
-                _phaseStartTime = DateTime.Now;
-                _withdrawListIndex = 0;
-                _withdrawsRemaining = WithdrawList[0].Count;
-                Status = $"Switching to {WithdrawTabName} tab for {WithdrawList.Count} items";
+                EnterStorePhase(gc);
                 return;
             }
 
-            // Single-item path — Boss/Sim fragment withdrawal.
-            if (!string.IsNullOrEmpty(WithdrawTabName) && !string.IsNullOrEmpty(WithdrawFragmentPath) && WithdrawCount > 0)
-            {
-                _pendingTabSwitch = WithdrawTabName;
-                _afterTabSwitch = StashPhase.WithdrawItems;
-
-                _phase = StashPhase.SwitchToWithdrawTab;
-                _phaseStartTime = DateTime.Now;
-                _withdrawsRemaining = WithdrawCount;
-                Status = $"Switching to {WithdrawTabName} tab for fragments";
-                return;
-            }
-
-            EnterStorePhase(gc);
+            // BƯỚC 2: Nếu không có đồ cần cất, chuyển thẳng sang rút vé/mảnh boss/supplies
+            EnterWithdrawPhase(gc);
         }
 
         private void EnterStorePhase(GameController gc)
@@ -378,6 +361,38 @@ namespace AutoExile.Systems
             _phase = StashPhase.StoreItems;
             _phaseStartTime = DateTime.Now;
             Status = "Storing items";
+        }
+
+        private void EnterWithdrawPhase(GameController gc)
+        {
+            // Multi-item path (Wave Farming)
+            if (!string.IsNullOrEmpty(WithdrawTabName) && WithdrawList.Count > 0)
+            {
+                _pendingTabSwitch = WithdrawTabName;
+                _afterTabSwitch = StashPhase.WithdrawItems;
+                _phase = StashPhase.SwitchToWithdrawTab;
+                _phaseStartTime = DateTime.Now;
+                _withdrawListIndex = 0;
+                _withdrawsRemaining = WithdrawList[0].Count;
+                Status = $"Switching to {WithdrawTabName} tab for {WithdrawList.Count} items";
+                return;
+            }
+
+            // Single-item path — Boss/Sim fragment withdrawal.
+            if (!string.IsNullOrEmpty(WithdrawTabName) && !string.IsNullOrEmpty(WithdrawFragmentPath) && WithdrawCount > 0)
+            {
+                _pendingTabSwitch = WithdrawTabName;
+                _afterTabSwitch = StashPhase.WithdrawItems;
+
+                _phase = StashPhase.SwitchToWithdrawTab;
+                _phaseStartTime = DateTime.Now;
+                _withdrawsRemaining = WithdrawCount;
+                Status = $"Switching to {WithdrawTabName} tab for fragments";
+                return;
+            }
+
+            // Không cần rút gì nữa -> Đóng rương
+            EnterCloseStash();
         }
 
         private StashResult TickOpenStash(GameController gc)
@@ -619,8 +634,7 @@ namespace AutoExile.Systems
 
         /// <summary>
         /// After a withdrawal batch completes (or the item wasn't found), move to
-        /// the next entry in <see cref="WithdrawList"/>, or transition to storing
-        /// items if we've exhausted the list.
+        /// the next entry in <see cref="WithdrawList"/>, or finish and close stash.
         /// </summary>
         private void AdvanceOrFinishWithdraw(GameController gc)
         {
@@ -634,7 +648,16 @@ namespace AutoExile.Systems
                     return; // stay in WithdrawItems phase, next tick processes the next item
                 }
             }
-            EnterStorePhase(gc);
+
+            // Withdraw finished -> Close stash
+            EnterCloseStash();
+        }
+
+        private StashResult AdvanceOrFinishStore(GameController gc)
+        {
+            // After storing is done, proceed to withdraw
+            EnterWithdrawPhase(gc);
+            return StashResult.InProgress;
         }
 
         private StashResult TickStoreItems(GameController gc)
@@ -651,19 +674,19 @@ namespace AutoExile.Systems
             if (BotInput.IsBatchRunning)
                 return StashResult.InProgress;
 
-            // If we already ran a batch, we're done — close stash
+            // If we already ran a batch, we're done — advance to withdraw
             if (_itemsStored > 0)
             {
-                Status = $"Done — stored {_itemsStored} items — closing stash";
-                return EnterCloseStash();
+                Status = $"Done — stored {_itemsStored} items — proceeding to withdraw";
+                return AdvanceOrFinishStore(gc);
             }
 
             // Get inventory slot items — same API as AutoPOE
             var slotItems = GetInventorySlotItems(gc);
             if (slotItems == null || slotItems.Count == 0)
             {
-                Status = $"Done — nothing to store — closing stash";
-                return EnterCloseStash();
+                Status = "Nothing to store — proceeding to withdraw";
+                return AdvanceOrFinishStore(gc);
             }
 
             // Build list of all stashable item positions
@@ -680,8 +703,8 @@ namespace AutoExile.Systems
 
             if (positions.Count == 0)
             {
-                Status = $"Done — stored {_itemsStored} items (kept {slotItems.Count} filtered) — closing stash";
-                return EnterCloseStash();
+                Status = $"Done storing (kept {slotItems.Count} items) — proceeding to withdraw";
+                return AdvanceOrFinishStore(gc);
             }
 
             // Fire the batch — single async sequence: hold Ctrl → click all → release Ctrl

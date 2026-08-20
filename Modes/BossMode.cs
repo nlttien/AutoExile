@@ -299,13 +299,27 @@ namespace AutoExile.Modes
         /// <summary>Stash filter that keeps boss fragments in inventory.</summary>
         private Func<ExileCore.PoEMemory.MemoryObjects.ServerInventory.InventSlotItem, bool>? GetStashFilter()
         {
-            if (_activeEncounter?.InventoryFragmentPath == null) return null;
-            var fragPath = _activeEncounter.InventoryFragmentPath;
+            var fragPath = _activeEncounter?.InventoryFragmentPath;
             return item =>
             {
-                var path = item.Item?.Path;
-                if (path != null && path.Contains(fragPath, StringComparison.OrdinalIgnoreCase))
-                    return false; // keep fragments
+                var path = item.Item?.Path ?? string.Empty;
+                var renderName = item.Item?.RenderName ?? string.Empty;
+
+                // Giữ lại tất cả các loại vé/mảnh boss trong hành trang
+                if (!string.IsNullOrEmpty(fragPath) && path.Contains(fragPath, StringComparison.OrdinalIgnoreCase))
+                    return false; // keep — don't stash
+
+                if (path.Contains("Cleansing", StringComparison.OrdinalIgnoreCase) ||
+                    path.Contains("Incandescent", StringComparison.OrdinalIgnoreCase) ||
+                    path.Contains("Invitation", StringComparison.OrdinalIgnoreCase) ||
+                    path.Contains("Simulacrum", StringComparison.OrdinalIgnoreCase) ||
+                    renderName.Contains("Invitation", StringComparison.OrdinalIgnoreCase) ||
+                    renderName.Contains("Incandescent", StringComparison.OrdinalIgnoreCase) ||
+                    renderName.Contains("Cleansing", StringComparison.OrdinalIgnoreCase))
+                {
+                    return false; // keep — don't stash
+                }
+
                 return true; // stash everything else
             };
         }
