@@ -801,45 +801,7 @@ namespace AutoExile
 
             UpdateDebugRangeCircle();
 
-            // Status overlay
-            var running = Settings.Running.Value;
-            var color = running ? SharpDX.Color.LimeGreen : SharpDX.Color.Yellow;
-            var status = running ? $"BOT: {_mode.Name}" : $"BOT: PAUSED ({_mode.Name})";
-            Graphics.DrawText(status, new Vector2(100, 80), color);
-
-            // Runtime line — shows elapsed (always) + remaining (when limit set).
-            // Pause time is excluded automatically by RuntimeTracker.
-            var maxMin   = Settings.Run.MaxRuntimeMinutes.Value;
-            var elapsed  = _runtime.ActiveDuration;
-            var elapsedStr = $"{(int)elapsed.TotalHours}:{elapsed.Minutes:D2}";
-            string runtimeText;
-            SharpDX.Color runtimeColor;
-            if (maxMin <= 0)
-            {
-                runtimeText  = $"Runtime: {elapsedStr} (no limit)";
-                runtimeColor = SharpDX.Color.LightGray;
-            }
-            else
-            {
-                var remaining = _runtime.Remaining(maxMin);
-                var remStr = $"{(int)remaining.TotalHours}:{remaining.Minutes:D2}";
-                runtimeText  = $"Runtime: {elapsedStr} / {maxMin / 60}:{(maxMin % 60):D2}  (stopping in {remStr})";
-                // Amber at last 10%, red at last 5 minutes
-                var pctLeft = (double)remaining.TotalMinutes / maxMin;
-                runtimeColor = remaining.TotalMinutes < 5 ? SharpDX.Color.Red
-                            :  pctLeft < 0.10              ? SharpDX.Color.Orange
-                            :                                SharpDX.Color.LightGray;
-            }
-            Graphics.DrawText(runtimeText, new Vector2(100, 96), runtimeColor);
-
-            // Human recorder indicator
-            if (_humanRecorder.IsRecording)
-            {
-                var recText = $"REC  {_humanRecorder.TicksRecorded} ticks";
-                Graphics.DrawText(recText, new Vector2(100, 116), SharpDX.Color.Red);
-            }
-
-            // Input & Action Monitor HUD Overlay
+            // Input & Action Monitor HUD Overlay (Includes Bot Status, Mode, Runtime, and Full Action Log)
             RenderInputAndActionHUD();
 
             // Loot tracker overlay (top-right area)
@@ -2548,7 +2510,37 @@ namespace AutoExile
             var isOpen = true;
             if (ImGui.Begin("⚡ Bot Input & Action Monitor (Scrollable Log)", ref isOpen, ImGuiWindowFlags.None))
             {
-                // 1. Current Mode & Phase Status
+                // 1. Bot State, Mode & Runtime
+                var running = Settings.Running.Value;
+                var botStateColor = running ? new Vector4(0.2f, 1.0f, 0.2f, 1.0f) : new Vector4(1.0f, 0.85f, 0.2f, 1.0f);
+                var botStateText = running ? $"BOT: RUNNING [{_mode.Name}]" : $"BOT: PAUSED [{_mode.Name}]";
+
+                var maxMin = Settings.Run.MaxRuntimeMinutes.Value;
+                var elapsed = _runtime.ActiveDuration;
+                var elapsedStr = $"{(int)elapsed.TotalHours}:{elapsed.Minutes:D2}";
+                string runtimeText;
+                if (maxMin <= 0)
+                {
+                    runtimeText = $"Runtime: {elapsedStr}";
+                }
+                else
+                {
+                    var remaining = _runtime.Remaining(maxMin);
+                    var remStr = $"{(int)remaining.TotalHours}:{remaining.Minutes:D2}";
+                    runtimeText = $"Runtime: {elapsedStr} / {maxMin / 60}:{(maxMin % 60):D2} (left: {remStr})";
+                }
+
+                ImGui.TextColored(botStateColor, botStateText);
+                ImGui.SameLine();
+                ImGui.TextDisabled($"|  {runtimeText}");
+
+                if (_humanRecorder.IsRecording)
+                {
+                    ImGui.SameLine();
+                    ImGui.TextColored(new Vector4(1f, 0.2f, 0.2f, 1f), $"[REC: {_humanRecorder.TicksRecorded}]");
+                }
+
+                // Current Mode & Phase Status
                 var modeName = _mode?.Name ?? "None";
                 var modeStatus = _mode?.Status ?? "Idle";
                 var navStatus = _navigation.IsNavigating
