@@ -129,15 +129,11 @@ namespace AutoExile.Modes.BossEncounters
             {
                 _bossEntity = FindBoss(gc);
 
-                if (_bossEntity != null)
+                if (_bossEntity != null && _bossEntity.IsAlive && _bossEntity.IsTargetable)
                 {
-                    var life = _bossEntity.GetComponent<Life>();
-                    if (life != null && life.CurHP > 0)
-                    {
-                        _bossWasAlive = true;
-                        _bossLastSeenAliveTime = DateTime.Now;
-                        _bossDeathPos = new Vector2(_bossEntity.GridPosNum.X, _bossEntity.GridPosNum.Y);
-                    }
+                    _bossWasAlive = true;
+                    _bossLastSeenAliveTime = DateTime.Now;
+                    _bossDeathPos = new Vector2(_bossEntity.GridPosNum.X, _bossEntity.GridPosNum.Y);
                 }
             }
 
@@ -330,21 +326,18 @@ namespace AutoExile.Modes.BossEncounters
                     var key = s.Key.Value;
                     if (key == System.Windows.Forms.Keys.RButton)
                     {
-                        Input.RightDown();
-                        Task.Delay(35).ContinueWith(_ => Input.RightUp());
+                        BotInput.RapidRightClickAt(targetScreenPos);
                     }
                     else
                     {
-                        Input.KeyDown(key);
-                        Task.Delay(35).ContinueWith(_ => Input.KeyUp(key));
+                        BotInput.PressKey(key);
                     }
                 }
             }
             else
             {
                 // Default fallback: Right Click
-                Input.RightDown();
-                Task.Delay(35).ContinueWith(_ => Input.RightUp());
+                BotInput.RapidRightClickAt(targetScreenPos);
             }
         }
 
@@ -458,22 +451,19 @@ namespace AutoExile.Modes.BossEncounters
             }
             catch { }
 
-            // Dấu hiệu 2: Nếu đã từng giao chiến với boss (_bossWasAlive == true)
+            // Dấu hiệu 2: Nếu đã từng giao chiến với boss (_bossWasAlive == true) hoặc đã bắt đầu đánh > 2.5s
             // nhưng hiện tại KHÔNG CÒN entity boss nào có thể target được
-            if (_bossWasAlive)
+            var aliveBoss = FindBoss(gc);
+            if (aliveBoss == null && (_bossWasAlive || (DateTime.Now - _combatStartTime).TotalSeconds > 2.5))
             {
-                var aliveBoss = FindBoss(gc);
-                if (aliveBoss == null)
-                {
-                    return true;
-                }
+                return true;
             }
 
             // Dấu hiệu 3: Kiểm tra trực tiếp entity Boss
             if (_bossEntity != null && _bossEntity.IsValid)
             {
                 var life = _bossEntity.GetComponent<Life>();
-                if (_bossEntity.IsDead || !_bossEntity.IsAlive || !_bossEntity.IsTargetable || !_bossEntity.IsHostile || (life != null && life.CurHP <= 0 && _bossWasAlive))
+                if (_bossEntity.IsDead || !_bossEntity.IsAlive || !_bossEntity.IsTargetable || !_bossEntity.IsHostile || (life != null && life.CurHP <= 0))
                 {
                     return true;
                 }
@@ -494,14 +484,17 @@ namespace AutoExile.Modes.BossEncounters
                     {
                         if (entity == null || !entity.IsValid) continue;
                         if (!entity.IsTargetable || !entity.IsAlive || entity.IsDead || !entity.IsHostile) continue;
-                        
-                        var life = entity.GetComponent<Life>();
-                        if (life != null && life.CurHP <= 0) continue;
 
-                        if (entity.Path != null && entity.Path.Contains(BossPath, StringComparison.OrdinalIgnoreCase))
+                        var path = entity.Path ?? string.Empty;
+                        var renderName = entity.RenderName ?? string.Empty;
+
+                        if (path.Contains("CleansingBoss", StringComparison.OrdinalIgnoreCase) ||
+                            path.Contains("CleansingMonsters", StringComparison.OrdinalIgnoreCase) ||
+                            renderName.Contains("Searing Exarch", StringComparison.OrdinalIgnoreCase) ||
+                            renderName.Contains("Exarch", StringComparison.OrdinalIgnoreCase))
+                        {
                             return entity;
-                        if (entity.RenderName != null && entity.RenderName.Contains("Searing Exarch", StringComparison.OrdinalIgnoreCase))
-                            return entity;
+                        }
                     }
                 }
 
@@ -511,13 +504,16 @@ namespace AutoExile.Modes.BossEncounters
                     if (entity == null || !entity.IsValid) continue;
                     if (!entity.IsTargetable || !entity.IsAlive || entity.IsDead || !entity.IsHostile) continue;
 
-                    var life = entity.GetComponent<Life>();
-                    if (life != null && life.CurHP <= 0) continue;
+                    var path = entity.Path ?? string.Empty;
+                    var renderName = entity.RenderName ?? string.Empty;
 
-                    if (entity.Path != null && entity.Path.Contains(BossPath, StringComparison.OrdinalIgnoreCase))
+                    if (path.Contains("CleansingBoss", StringComparison.OrdinalIgnoreCase) ||
+                        path.Contains("CleansingMonsters", StringComparison.OrdinalIgnoreCase) ||
+                        renderName.Contains("Searing Exarch", StringComparison.OrdinalIgnoreCase) ||
+                        renderName.Contains("Exarch", StringComparison.OrdinalIgnoreCase))
+                    {
                         return entity;
-                    if (entity.RenderName != null && entity.RenderName.Contains("Searing Exarch", StringComparison.OrdinalIgnoreCase))
-                        return entity;
+                    }
                 }
             }
             catch { }
