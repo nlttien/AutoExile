@@ -2568,9 +2568,9 @@ namespace AutoExile
 
             // 3. Memory & Recording Status
             var monsterCount = _entityCache.Monsters?.Count ?? 0;
-            var playerHp = GameController.Player?.GetComponent<Life>()?.HPPercentage ?? 100;
+            var playerHp = GameController.Player?.GetComponent<ExileCore.PoEMemory.Components.Life>()?.HPPercentage ?? 100;
             var areaName = GameController.Area?.CurrentArea?.Name ?? "Unknown";
-            var isRecordingMem = _humanRecorder.IsRecording || _recorder.IsRecording;
+            var isRecordingMem = _humanRecorder.IsRecording || _mavenRecorder.IsRecording;
             var memRecordText = isRecordingMem
                 ? $"RECORDER: ACTIVE ({_humanRecorder.TicksRecorded} ticks recorded)"
                 : "RECORDER: OFF (Memory Read-Only Sync)";
