@@ -563,20 +563,54 @@ namespace AutoExile.Modes
             var townPortal = ModeHelpers.FindNearestPortal(gc);
             if (townPortal != null) return townPortal;
 
-            // Check area transitions (boss exit portals like RitualBossPortal)
+            // Check area transitions & portals across all entity collections
             Entity? best = null;
             float bestDist = float.MaxValue;
-            foreach (var entity in gc.EntityListWrapper.ValidEntitiesByType[EntityType.AreaTransition])
+
+            if (gc.EntityListWrapper.ValidEntitiesByType.TryGetValue(EntityType.AreaTransition, out var transitions))
             {
-                if (!entity.IsTargetable) continue;
-                // Boss exit portals typically have "Portal" in their path
-                if (!entity.Path.Contains("Portal", StringComparison.OrdinalIgnoreCase)) continue;
-                if (entity.DistancePlayer < bestDist)
+                foreach (var entity in transitions)
                 {
-                    bestDist = entity.DistancePlayer;
-                    best = entity;
+                    if (entity == null || !entity.IsValid || !entity.IsTargetable) continue;
+                    var path = entity.Path ?? string.Empty;
+                    var name = entity.RenderName ?? string.Empty;
+                    if (path.Contains("Portal", StringComparison.OrdinalIgnoreCase) ||
+                        path.Contains("Transition", StringComparison.OrdinalIgnoreCase) ||
+                        name.Contains("Portal", StringComparison.OrdinalIgnoreCase) ||
+                        name.Contains("Exit", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (entity.DistancePlayer < bestDist)
+                        {
+                            bestDist = entity.DistancePlayer;
+                            best = entity;
+                        }
+                    }
                 }
             }
+
+            if (best != null) return best;
+
+            foreach (var entity in gc.EntityListWrapper.OnlyValidEntities)
+            {
+                if (entity == null || !entity.IsValid || !entity.IsTargetable) continue;
+                var path = entity.Path ?? string.Empty;
+                var name = entity.RenderName ?? string.Empty;
+
+                if (path.Contains("CleansingPortal", StringComparison.OrdinalIgnoreCase) ||
+                    path.Contains("RitualBossPortal", StringComparison.OrdinalIgnoreCase) ||
+                    path.Contains("AreaTransition", StringComparison.OrdinalIgnoreCase) ||
+                    (path.Contains("Portal", StringComparison.OrdinalIgnoreCase) && !path.Contains("Monster", StringComparison.OrdinalIgnoreCase)) ||
+                    name.Contains("Portal", StringComparison.OrdinalIgnoreCase) ||
+                    name.Contains("Exit", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (entity.DistancePlayer < bestDist)
+                    {
+                        bestDist = entity.DistancePlayer;
+                        best = entity;
+                    }
+                }
+            }
+
             return best;
         }
 

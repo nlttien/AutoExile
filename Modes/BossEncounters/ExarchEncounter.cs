@@ -491,7 +491,7 @@ namespace AutoExile.Modes.BossEncounters
         {
             try
             {
-                // 1. Quét trong ValidEntitiesByType[Monster] — CHỈ LẤY BOSS CÒN SỐNG & TARGETABLE
+                // 1. Quét trong ValidEntitiesByType[Monster] — CHỈ LẤY ĐÚNG SEARING EXARCH CÒN SỐNG & TARGETABLE
                 var monsters = gc.EntityListWrapper.ValidEntitiesByType[EntityType.Monster];
                 if (monsters != null)
                 {
@@ -504,7 +504,6 @@ namespace AutoExile.Modes.BossEncounters
                         var renderName = entity.RenderName ?? string.Empty;
 
                         if (path.Contains("CleansingBoss", StringComparison.OrdinalIgnoreCase) ||
-                            path.Contains("CleansingMonsters", StringComparison.OrdinalIgnoreCase) ||
                             renderName.Contains("Searing Exarch", StringComparison.OrdinalIgnoreCase) ||
                             renderName.Contains("Exarch", StringComparison.OrdinalIgnoreCase))
                         {
@@ -513,7 +512,7 @@ namespace AutoExile.Modes.BossEncounters
                     }
                 }
 
-                // 2. Quét trong OnlyValidEntities — CHỈ LẤY BOSS CÒN SỐNG & TARGETABLE
+                // 2. Quét trong OnlyValidEntities — CHỈ LẤY ĐÚNG SEARING EXARCH CÒN SỐNG & TARGETABLE
                 foreach (var entity in gc.EntityListWrapper.OnlyValidEntities)
                 {
                     if (entity == null || !entity.IsValid) continue;
@@ -523,7 +522,6 @@ namespace AutoExile.Modes.BossEncounters
                     var renderName = entity.RenderName ?? string.Empty;
 
                     if (path.Contains("CleansingBoss", StringComparison.OrdinalIgnoreCase) ||
-                        path.Contains("CleansingMonsters", StringComparison.OrdinalIgnoreCase) ||
                         renderName.Contains("Searing Exarch", StringComparison.OrdinalIgnoreCase) ||
                         renderName.Contains("Exarch", StringComparison.OrdinalIgnoreCase))
                     {
