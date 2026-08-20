@@ -428,23 +428,54 @@ namespace AutoExile.Systems
             // Find target tab index by name
             var names = stashEl.AllStashNames;
             int targetIdx = -1;
-            if (names != null)
+            if (names != null && names.Count > 0)
             {
+                // 1. Exact match / Trimmed match
                 for (int i = 0; i < names.Count; i++)
                 {
-                    if (names[i].Equals(_pendingTabSwitch, StringComparison.OrdinalIgnoreCase))
+                    if (string.Equals(names[i]?.Trim(), _pendingTabSwitch.Trim(), StringComparison.OrdinalIgnoreCase))
                     {
                         targetIdx = i;
                         break;
                     }
                 }
+
+                // 2. Substring match
+                if (targetIdx < 0)
+                {
+                    for (int i = 0; i < names.Count; i++)
+                    {
+                        if (names[i] != null && (names[i].Contains(_pendingTabSwitch, StringComparison.OrdinalIgnoreCase) ||
+                                                 _pendingTabSwitch.Contains(names[i], StringComparison.OrdinalIgnoreCase)))
+                        {
+                            targetIdx = i;
+                            break;
+                        }
+                    }
+                }
+
+                // 3. Numeric index match (e.g. tab "1", "2")
+                if (targetIdx < 0 && int.TryParse(_pendingTabSwitch, out var numIdx) && numIdx >= 1 && numIdx <= names.Count)
+                {
+                    targetIdx = numIdx - 1;
+                }
             }
 
             if (targetIdx < 0)
             {
-                Status = $"Tab '{_pendingTabSwitch}' not found";
-                _phase = StashPhase.Idle;
-                return StashResult.Failed;
+                // Cho phép thời gian chờ (grace period) 3.5s để AllStashNames nạp đầy đủ từ bộ nhớ máy chủ
+                if ((DateTime.Now - _phaseStartTime).TotalSeconds < 3.5)
+                {
+                    Status = $"Waiting for tab '{_pendingTabSwitch}' to load...";
+                    return StashResult.InProgress;
+                }
+
+                // Nếu không tìm thấy tên Tab, sử dụng Tab hiện tại đang mở thay vì làm hỏng cả chu kỳ boss
+                Status = $"Tab '{_pendingTabSwitch}' not found — using current tab";
+                _pendingTabSwitch = null;
+                _phase = _afterTabSwitch;
+                _phaseStartTime = DateTime.Now;
+                return StashResult.InProgress;
             }
 
             var currentIdx = stashEl.IndexVisibleStash;
@@ -462,9 +493,11 @@ namespace AutoExile.Systems
             // Tab switch timeout
             if ((DateTime.Now - _phaseStartTime).TotalSeconds > 15)
             {
-                Status = $"Tab switch timeout — wanted '{_pendingTabSwitch}' (on {currentIdx})";
-                _phase = StashPhase.Idle;
-                return StashResult.Failed;
+                Status = $"Tab switch timeout — wanted '{_pendingTabSwitch}' (on {currentIdx}) — proceeding anyway";
+                _pendingTabSwitch = null;
+                _phase = _afterTabSwitch;
+                _phaseStartTime = DateTime.Now;
+                return StashResult.InProgress;
             }
 
             // Settle delay after each arrow press (0.5s for Guild Stash)
