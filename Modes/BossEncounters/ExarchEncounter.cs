@@ -450,8 +450,7 @@ namespace AutoExile.Modes.BossEncounters
                     var path = entity.Path ?? string.Empty;
                     var renderName = entity.RenderName ?? string.Empty;
 
-                    if (path.Contains("TheEnvoy", StringComparison.OrdinalIgnoreCase) ||
-                        renderName.Contains("The Envoy", StringComparison.OrdinalIgnoreCase) ||
+                    if (path.Contains("Envoy", StringComparison.OrdinalIgnoreCase) ||
                         renderName.Contains("Envoy", StringComparison.OrdinalIgnoreCase))
                     {
                         return true;
@@ -460,37 +459,30 @@ namespace AutoExile.Modes.BossEncounters
             }
             catch { }
 
-            // Dấu hiệu 2: Kiểm tra trực tiếp entity Boss
+            // Dấu hiệu 2: Nếu đã từng giao chiến với boss (_bossWasAlive == true)
+            // nhưng hiện tại KHÔNG CÒN entity boss nào có thể target được (IsTargetable == false hoặc CurHP <= 0)
+            if (_bossWasAlive)
+            {
+                var aliveBoss = FindBoss(gc);
+                if (aliveBoss == null)
+                {
+                    // Không còn boss sống và targetable trong map
+                    if ((DateTime.Now - _bossLastSeenAliveTime).TotalMilliseconds > 400)
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            // Dấu hiệu 3: Kiểm tra trực tiếp entity Boss
             if (_bossEntity != null && _bossEntity.IsValid)
             {
                 var life = _bossEntity.GetComponent<Life>();
-                if (_bossEntity.IsDead || !_bossEntity.IsAlive || (life != null && life.CurHP <= 0 && _bossWasAlive))
+                if (_bossEntity.IsDead || !_bossEntity.IsAlive || !_bossEntity.IsTargetable || !_bossEntity.IsHostile || (life != null && life.CurHP <= 0 && _bossWasAlive))
                 {
                     return true;
                 }
             }
-
-            // Dấu hiệu 3: Tìm entity Searing Exarch trong OnlyValidEntities
-            try
-            {
-                foreach (var entity in gc.EntityListWrapper.OnlyValidEntities)
-                {
-                    if (entity == null || !entity.IsValid) continue;
-                    var path = entity.Path ?? string.Empty;
-                    var renderName = entity.RenderName ?? string.Empty;
-
-                    if (path.Contains(BossPath, StringComparison.OrdinalIgnoreCase) ||
-                        renderName.Contains("Searing Exarch", StringComparison.OrdinalIgnoreCase))
-                    {
-                        var life = entity.GetComponent<Life>();
-                        if (entity.IsDead || !entity.IsAlive || (life != null && life.CurHP <= 0 && _bossWasAlive))
-                        {
-                            return true;
-                        }
-                    }
-                }
-            }
-            catch { }
 
             return false;
         }
@@ -499,13 +491,18 @@ namespace AutoExile.Modes.BossEncounters
         {
             try
             {
-                // 1. Quét trong ValidEntitiesByType[Monster]
+                // 1. Quét trong ValidEntitiesByType[Monster] — CHỈ LẤY BOSS CÒN SỐNG & TARGETABLE
                 var monsters = gc.EntityListWrapper.ValidEntitiesByType[EntityType.Monster];
                 if (monsters != null)
                 {
                     foreach (var entity in monsters)
                     {
                         if (entity == null || !entity.IsValid) continue;
+                        if (!entity.IsTargetable || !entity.IsAlive || entity.IsDead || !entity.IsHostile) continue;
+                        
+                        var life = entity.GetComponent<Life>();
+                        if (life != null && life.CurHP <= 0) continue;
+
                         if (entity.Path != null && entity.Path.Contains(BossPath, StringComparison.OrdinalIgnoreCase))
                             return entity;
                         if (entity.RenderName != null && entity.RenderName.Contains("Searing Exarch", StringComparison.OrdinalIgnoreCase))
@@ -513,10 +510,15 @@ namespace AutoExile.Modes.BossEncounters
                     }
                 }
 
-                // 2. Quét trong OnlyValidEntities
+                // 2. Quét trong OnlyValidEntities — CHỈ LẤY BOSS CÒN SỐNG & TARGETABLE
                 foreach (var entity in gc.EntityListWrapper.OnlyValidEntities)
                 {
                     if (entity == null || !entity.IsValid) continue;
+                    if (!entity.IsTargetable || !entity.IsAlive || entity.IsDead || !entity.IsHostile) continue;
+
+                    var life = entity.GetComponent<Life>();
+                    if (life != null && life.CurHP <= 0) continue;
+
                     if (entity.Path != null && entity.Path.Contains(BossPath, StringComparison.OrdinalIgnoreCase))
                         return entity;
                     if (entity.RenderName != null && entity.RenderName.Contains("Searing Exarch", StringComparison.OrdinalIgnoreCase))
