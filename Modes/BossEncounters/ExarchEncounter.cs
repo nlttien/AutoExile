@@ -46,7 +46,9 @@ namespace AutoExile.Modes.BossEncounters
         public IReadOnlyList<string> MustLootItems { get; } = new[]
         {
             "Forbidden Flame",
+            "Crimson Jewel",
             "Crystallised Omniscience",
+            "Onyx Amulet",
             "Exceptional Eldritch Ichor",
             "Grand Eldritch Ichor",
             "Greater Eldritch Ichor",
@@ -57,7 +59,8 @@ namespace AutoExile.Modes.BossEncounters
             "The Annihilating Light",
             "Dawnbreaker",
             "Incandescent Invitation",
-            "Curio Item"
+            "Curio Item",
+            "Jewel"
         };
 
         public bool SuppressCombat => _phase == ExarchPhase.WaitingForLoot;
