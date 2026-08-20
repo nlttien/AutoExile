@@ -2126,7 +2126,7 @@ namespace AutoExile
         {
             try
             {
-                var stashEl = GameController.IngameState?.IngameUi?.StashElement;
+                var stashEl = StashSystem.GetActiveStashElement(GameController);
                 if (stashEl?.IsVisible != true) return;
 
                 var names = stashEl.AllStashNames;
