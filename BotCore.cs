@@ -2600,7 +2600,7 @@ namespace AutoExile
                 ImGui.TextDisabled($"({actions.Count} actions - scroll with mouse wheel)");
 
                 // Scrollable log area (Takes full remaining window height)
-                if (ImGui.BeginChild("LogScrollRegion", new Vector2(0, 0), true, ImGuiWindowFlags.AlwaysVerticalScrollbar))
+                if (ImGui.BeginChild("LogScrollRegion", new Vector2(0, 0), ImGuiChildFlags.Borders, ImGuiWindowFlags.AlwaysVerticalScrollbar))
                 {
                     for (int i = actions.Count - 1; i >= 0; i--)
                     {
