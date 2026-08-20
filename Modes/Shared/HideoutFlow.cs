@@ -272,7 +272,8 @@ namespace AutoExile.Modes.Shared
             {
                 case MapDeviceResult.Succeeded:
                     Status = "Map opened — entering";
-                    // Area change will fire when player enters the portal
+                    _phase = HideoutPhase.EnterPortal;
+                    _phaseStartTime = DateTime.Now;
                     break;
                 case MapDeviceResult.Failed:
                     Status = $"Map device failed: {ctx.MapDevice.Status}";

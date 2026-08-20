@@ -30,16 +30,29 @@ namespace AutoExile.Modes.Shared
                 var path = entity.Path ?? string.Empty;
                 var renderName = entity.RenderName ?? string.Empty;
 
+                // Bắt buộc loại trừ chính cỗ máy Map Device để không click nhầm vào máy thay vì cổng portal
+                if (renderName.Equals("Map Device", StringComparison.OrdinalIgnoreCase) ||
+                    renderName.Contains("Mapping Device", StringComparison.OrdinalIgnoreCase) ||
+                    path.EndsWith("/MappingDevice", StringComparison.OrdinalIgnoreCase) ||
+                    path.EndsWith("/MapDevice", StringComparison.OrdinalIgnoreCase) ||
+                    path.Equals("Metadata/MiscellaneousObjects/MapDevice", StringComparison.OrdinalIgnoreCase) ||
+                    path.Equals("Metadata/Terrain/Hideout/Objects/MappingDevice", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
                 bool isPortal = entity.Type == EntityType.TownPortal ||
                                 entity.Type == EntityType.AreaTransition ||
-                                path.Contains("Portal", StringComparison.OrdinalIgnoreCase) ||
-                                path.Contains("Town_Portals", StringComparison.OrdinalIgnoreCase) ||
                                 path.Contains("MapDevicePortal", StringComparison.OrdinalIgnoreCase) ||
-                                path.Contains("MappingDevice", StringComparison.OrdinalIgnoreCase) ||
+                                path.Contains("Town_Portals", StringComparison.OrdinalIgnoreCase) ||
                                 path.Contains("SekhemaPortal", StringComparison.OrdinalIgnoreCase) ||
+                                path.Contains("Portal", StringComparison.OrdinalIgnoreCase) ||
                                 renderName.Contains("Portal", StringComparison.OrdinalIgnoreCase) ||
                                 renderName.Contains("Absence", StringComparison.OrdinalIgnoreCase) ||
-                                renderName.Contains("Crucible", StringComparison.OrdinalIgnoreCase);
+                                renderName.Contains("Crucible", StringComparison.OrdinalIgnoreCase) ||
+                                renderName.Contains("Exarch", StringComparison.OrdinalIgnoreCase) ||
+                                renderName.Contains("Eater", StringComparison.OrdinalIgnoreCase) ||
+                                renderName.Contains("Maven", StringComparison.OrdinalIgnoreCase);
 
                 if (!isPortal) continue;
 
