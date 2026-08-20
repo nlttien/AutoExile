@@ -766,17 +766,6 @@ namespace AutoExile.Modes
 
         public void Render(BotContext ctx)
         {
-            var g = ctx.Graphics;
-            if (g == null) return;
-
-            float hudX = 20, hudY = 200, lineH = 18;
-            g.DrawText($"Boss: {_activeEncounter?.Name ?? "none"}", new Vector2(hudX, hudY), SharpDX.Color.Orange);
-            hudY += lineH;
-            g.DrawText($"Phase: {_phase}  Runs: {_runsCompleted}  Deaths: {_deathCount}  Drops: {_targetItemsLooted}",
-                new Vector2(hudX, hudY), SharpDX.Color.White);
-            hudY += lineH;
-            g.DrawText(Status, new Vector2(hudX, hudY), SharpDX.Color.Gray);
-
             _activeEncounter?.Render(ctx);
         }
     }

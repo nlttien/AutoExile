@@ -596,20 +596,8 @@ namespace AutoExile.Modes.BossEncounters
                 }
             }
 
-            // HUD
-            float hudX = 20, hudY = 250, lineH = 18;
-            var phaseColor = _phase switch
-            {
-                ExarchPhase.Fighting => SharpDX.Color.Red,
-                ExarchPhase.BallPhase => SharpDX.Color.OrangeRed,
-                ExarchPhase.WaitingForLoot => SharpDX.Color.LimeGreen,
-                _ => SharpDX.Color.White,
-            };
-            g.DrawText($"Exarch: {_phase}", new Vector2(hudX, hudY), phaseColor);
-            hudY += lineH;
-            g.DrawText(Status, new Vector2(hudX, hudY), SharpDX.Color.Gray);
-            hudY += lineH;
-            g.DrawText($"Player: ({playerGrid.X:F0}, {playerGrid.Y:F0})", new Vector2(hudX, hudY), SharpDX.Color.DarkGray);
+            // In-world visual markers are rendered above.
+            // HUD info is consolidated cleanly in BotCore's Action Monitor HUD.
         }
 
         public void Reset()
