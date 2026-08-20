@@ -616,12 +616,9 @@ namespace AutoExile.Systems
         /// </summary>
         public static void ReleaseRightClick()
         {
-            if (_isRightClickHeld)
-            {
-                Input.RightUp();
-                _isRightClickHeld = false;
-                MarkInputEvent("RightUp", "release-right");
-            }
+            Input.RightUp();
+            _isRightClickHeld = false;
+            MarkInputEvent("RightUp", "release-right");
         }
 
         /// <summary>

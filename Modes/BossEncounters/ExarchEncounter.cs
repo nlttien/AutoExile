@@ -236,6 +236,7 @@ namespace AutoExile.Modes.BossEncounters
             if (IsBossDead(gc))
             {
                 BotInput.ReleaseRightClick();
+                BotInput.ReleaseAllKeys();
                 _phase = ExarchPhase.WaitingForLoot;
                 _phaseStartTime = DateTime.Now;
                 _bossDeathPos ??= (_bossEntity != null ? new Vector2(_bossEntity.GridPosNum.X, _bossEntity.GridPosNum.Y) : ArenaCenterPos);
@@ -244,19 +245,17 @@ namespace AutoExile.Modes.BossEncounters
                 return BossEncounterResult.InProgress;
             }
 
-            // 2. Nếu đã từng thấy boss sống mà giờ không thấy đâu nữa sau 1.5s -> Boss đã chết!
-            if (_bossWasAlive && (_bossEntity == null || !_bossEntity.IsAlive || _bossEntity.IsDead))
+            // 2. Nếu đã từng thấy boss sống mà giờ không thấy đâu nữa -> Boss đã chết!
+            if (_bossWasAlive && (_bossEntity == null || !_bossEntity.IsAlive || !_bossEntity.IsTargetable || _bossEntity.IsDead))
             {
-                if ((DateTime.Now - _bossLastSeenAliveTime).TotalSeconds > 1.5)
-                {
-                    BotInput.ReleaseRightClick();
-                    _phase = ExarchPhase.WaitingForLoot;
-                    _phaseStartTime = DateTime.Now;
-                    _bossDeathPos ??= ArenaCenterPos;
-                    Status = "Searing Exarch defeated — sweeping loot";
-                    ctx.Log("[Exarch] Boss despawned after active combat, switching to loot phase");
-                    return BossEncounterResult.InProgress;
-                }
+                BotInput.ReleaseRightClick();
+                BotInput.ReleaseAllKeys();
+                _phase = ExarchPhase.WaitingForLoot;
+                _phaseStartTime = DateTime.Now;
+                _bossDeathPos ??= ArenaCenterPos;
+                Status = "Searing Exarch defeated — sweeping loot";
+                ctx.Log("[Exarch] Boss despawned after active combat, switching to loot phase");
+                return BossEncounterResult.InProgress;
             }
 
             // 3. Chỉ xả skill khi THỰC SỰ có Boss sống trước mặt hoặc đang pre-cast lúc mở đầu
@@ -460,17 +459,13 @@ namespace AutoExile.Modes.BossEncounters
             catch { }
 
             // Dấu hiệu 2: Nếu đã từng giao chiến với boss (_bossWasAlive == true)
-            // nhưng hiện tại KHÔNG CÒN entity boss nào có thể target được (IsTargetable == false hoặc CurHP <= 0)
+            // nhưng hiện tại KHÔNG CÒN entity boss nào có thể target được
             if (_bossWasAlive)
             {
                 var aliveBoss = FindBoss(gc);
                 if (aliveBoss == null)
                 {
-                    // Không còn boss sống và targetable trong map
-                    if ((DateTime.Now - _bossLastSeenAliveTime).TotalMilliseconds > 400)
-                    {
-                        return true;
-                    }
+                    return true;
                 }
             }
 
