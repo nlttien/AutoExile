@@ -234,32 +234,15 @@ namespace AutoExile.Modes.BossEncounters
 
             var distToTarget = Vector2.Distance(playerGrid, targetGrid);
 
-            // Check if boss is dead: only when CurHP <= 0 or IsDead is true
-            bool isBossDead = false;
-            if (_bossEntity != null)
-            {
-                var life = _bossEntity.GetComponent<Life>();
-                if (_bossEntity.IsDead || (life != null && life.CurHP <= 0 && _bossWasAlive))
-                {
-                    isBossDead = true;
-                }
-            }
-            else if (_bossWasAlive && _bossLastSeenAliveTime != DateTime.MinValue &&
-                     (DateTime.Now - _bossLastSeenAliveTime).TotalSeconds > 5.0 &&
-                     (DateTime.Now - _combatStartTime).TotalSeconds > 5.0)
-            {
-                // Boss entity despawned after active combat
-                isBossDead = true;
-            }
-
-            if (isBossDead)
+            // Check if boss is dead
+            if (IsBossDead(gc))
             {
                 BotInput.ReleaseRightClick();
                 _phase = ExarchPhase.WaitingForLoot;
                 _phaseStartTime = DateTime.Now;
-                _bossDeathPos ??= ArenaCenterPos;
+                _bossDeathPos ??= (_bossEntity != null ? new Vector2(_bossEntity.GridPosNum.X, _bossEntity.GridPosNum.Y) : ArenaCenterPos);
                 Status = "Searing Exarch defeated — sweeping loot";
-                ctx.Log("[Exarch] Boss confirmed dead, switching to loot phase");
+                ctx.Log("[Exarch] Boss confirmed dead (via HP/IsDead/Envoy/MonsterCount), switching to loot phase");
                 return BossEncounterResult.InProgress;
             }
 
@@ -439,16 +422,102 @@ namespace AutoExile.Modes.BossEncounters
             return BossEncounterResult.InProgress;
         }
 
+        private bool IsBossDead(GameController gc)
+        {
+            // 1. Kiểm tra trực tiếp _bossEntity nếu còn giữ tham chiếu
+            if (_bossEntity != null)
+            {
+                var life = _bossEntity.GetComponent<Life>();
+                if (_bossEntity.IsDead || !_bossEntity.IsAlive || (life != null && life.CurHP <= 0))
+                {
+                    return true;
+                }
+            }
+
+            // 2. Quét OnlyValidEntities để phát hiện NPC The Envoy hoặc xác Searing Exarch
+            try
+            {
+                bool foundAliveBoss = false;
+                foreach (var entity in gc.EntityListWrapper.OnlyValidEntities)
+                {
+                    if (entity == null || !entity.IsValid) continue;
+                    var path = entity.Path ?? string.Empty;
+                    var renderName = entity.RenderName ?? string.Empty;
+
+                    // The Envoy chỉ xuất hiện khi Searing Exarch đã chết
+                    if (path.Contains("TheEnvoy", StringComparison.OrdinalIgnoreCase) ||
+                        renderName.Contains("The Envoy", StringComparison.OrdinalIgnoreCase) ||
+                        renderName.Contains("Envoy", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+
+                    if (path.Contains(BossPath, StringComparison.OrdinalIgnoreCase) ||
+                        renderName.Contains("Searing Exarch", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var life = entity.GetComponent<Life>();
+                        if (entity.IsDead || !entity.IsAlive || (life != null && life.CurHP <= 0))
+                        {
+                            return true;
+                        }
+                        if (entity.IsAlive && life != null && life.CurHP > 0)
+                        {
+                            foundAliveBoss = true;
+                        }
+                    }
+                }
+
+                // Nếu đã giao chiến mà hiện không còn boss sống trong arena -> Đã chết!
+                if ((_hasEngagedBoss || _bossWasAlive) && !foundAliveBoss)
+                {
+                    var monsters = gc.EntityListWrapper.ValidEntitiesByType[EntityType.Monster];
+                    if (monsters == null || monsters.Count == 0)
+                    {
+                        return true;
+                    }
+
+                    bool hasAnyUniqueMonster = false;
+                    foreach (var m in monsters)
+                    {
+                        if (m != null && m.IsValid && m.IsAlive && m.Rarity == MonsterRarity.Unique)
+                        {
+                            hasAnyUniqueMonster = true;
+                            break;
+                        }
+                    }
+
+                    if (!hasAnyUniqueMonster)
+                    {
+                        return true;
+                    }
+                }
+            }
+            catch { }
+
+            return false;
+        }
+
         private Entity? FindBoss(GameController gc)
         {
             try
             {
+                // Ưu tiên tìm trong Monster
                 foreach (var entity in gc.EntityListWrapper.ValidEntitiesByType[EntityType.Monster])
                 {
                     if (entity.Rarity != MonsterRarity.Unique) continue;
 
                     if (entity.Path != null && entity.Path.Contains(BossPath, StringComparison.OrdinalIgnoreCase))
                         return entity;
+                }
+
+                // Fallback: Tìm trong OnlyValidEntities
+                foreach (var entity in gc.EntityListWrapper.OnlyValidEntities)
+                {
+                    if (entity != null && entity.IsValid && entity.Path != null &&
+                        entity.Path.Contains(BossPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return entity;
+                    }
                 }
             }
             catch { }
