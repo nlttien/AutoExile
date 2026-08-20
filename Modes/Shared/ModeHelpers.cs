@@ -12,24 +12,41 @@ namespace AutoExile.Modes.Shared
     public static class ModeHelpers
     {
         /// <summary>
-        /// Find the best targetable TownPortal entity.
-        /// Prefers the portal with lowest grid Y (south on screen / behind map device in isometric view).
-        /// This avoids portals that visually block the map device.
+        /// <summary>
+        /// Find the best targetable portal entity (TownPortal, MapDevicePortal, AreaTransition, or custom MTX).
         /// </summary>
         public static Entity? FindNearestPortal(GameController gc)
         {
+            if (gc?.EntityListWrapper?.OnlyValidEntities == null) return null;
+
             Entity? best = null;
-            float bestY = float.MaxValue;
+            float bestDistSq = float.MaxValue;
+            var playerPos = gc.Player?.GridPosNum ?? Vector2.Zero;
+
             foreach (var entity in gc.EntityListWrapper.OnlyValidEntities)
             {
-                if (!entity.IsTargetable) continue;
-                // Standard TownPortal entities OR Effect-type MTX portals (e.g. Black Barya's SandHourglass)
-                var isTownPortal = entity.Type == EntityType.TownPortal;
-                var isMtxPortal = entity.Path.Contains("Town_Portals", StringComparison.OrdinalIgnoreCase);
-                if (!isTownPortal && !isMtxPortal) continue;
-                if (entity.GridPosNum.Y < bestY)
+                if (entity == null || !entity.IsValid || !entity.IsTargetable) continue;
+
+                var path = entity.Path ?? string.Empty;
+                var renderName = entity.RenderName ?? string.Empty;
+
+                bool isPortal = entity.Type == EntityType.TownPortal ||
+                                entity.Type == EntityType.AreaTransition ||
+                                path.Contains("Portal", StringComparison.OrdinalIgnoreCase) ||
+                                path.Contains("Town_Portals", StringComparison.OrdinalIgnoreCase) ||
+                                path.Contains("MapDevicePortal", StringComparison.OrdinalIgnoreCase) ||
+                                path.Contains("MappingDevice", StringComparison.OrdinalIgnoreCase) ||
+                                path.Contains("SekhemaPortal", StringComparison.OrdinalIgnoreCase) ||
+                                renderName.Contains("Portal", StringComparison.OrdinalIgnoreCase) ||
+                                renderName.Contains("Absence", StringComparison.OrdinalIgnoreCase) ||
+                                renderName.Contains("Crucible", StringComparison.OrdinalIgnoreCase);
+
+                if (!isPortal) continue;
+
+                var distSq = Vector2.DistanceSquared(playerPos, entity.GridPosNum);
+                if (distSq < bestDistSq)
                 {
-                    bestY = entity.GridPosNum.Y;
+                    bestDistSq = distSq;
                     best = entity;
                 }
             }
